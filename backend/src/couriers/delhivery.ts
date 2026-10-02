@@ -14,7 +14,9 @@ const BASES = { staging: 'https://staging-express.delhivery.com', production: 'h
 export interface DelhiveryConfig {
   token: string;
   env?: 'staging' | 'production';
-  pickupLocation: string; // must match your registered Delhivery warehouse name exactly
+  pickupLocation: string; // must match your registered Delhivery warehouse name exactly (case-sensitive)
+  sellerGstTin?: string;  // mandatory on shipment creation per Delhivery's order-creation docs
+  hsnCode?: string;       // mandatory on shipment creation per Delhivery's order-creation docs
   dryRun?: boolean;       // true = never create/cancel/book anything, only read
 }
 
@@ -71,9 +73,15 @@ export class DelhiveryAdapter implements CourierAdapter {
   }
 
   async createShipment(to: Address, p: ParcelInput): Promise<ShipmentResult> {
+    if (!this.cfg.dryRun && (!this.cfg.sellerGstTin || !this.cfg.hsnCode || !this.cfg.pickupLocation)) {
+      throw new CourierError(400, 'Delhivery needs DELHIVERY_SELLER_GST_TIN, DELHIVERY_HSN_CODE and DELHIVERY_PICKUP_LOCATION to create shipments', false);
+    }
     const shipment = {
       name: to.name, add: to.line1, pin: to.pincode, city: to.city, state: to.state, country: to.country ?? 'India',
-      phone: to.phone, order: p.orderId, payment_mode: p.paymentMode,
+      phone: to.phone,
+      // Public docs name the field order_id; older integrations use order. VERIFY against the portal sample, then keep one.
+      order: p.orderId, order_id: p.orderId,
+      seller_gst_tin: this.cfg.sellerGstTin, hsn_code: this.cfg.hsnCode, payment_mode: p.paymentMode,
       cod_amount: p.paymentMode === 'COD' ? p.codAmount ?? p.declaredValue : 0,
       total_amount: p.declaredValue, products_desc: p.productDescription, quantity: p.quantity,
       weight: p.weightGrams, shipment_length: p.lengthCm, shipment_width: p.breadthCm, shipment_height: p.heightCm,

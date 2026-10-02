@@ -12,6 +12,8 @@ export function buildCouriers(env: NodeJS.ProcessEnv = process.env): Map<string,
       token: env.DELHIVERY_API_TOKEN,
       env: env.DELHIVERY_ENV === 'production' ? 'production' : 'staging',
       pickupLocation: env.DELHIVERY_PICKUP_LOCATION ?? '',
+      sellerGstTin: env.DELHIVERY_SELLER_GST_TIN,
+      hsnCode: env.DELHIVERY_HSN_CODE,
       dryRun: env.DELHIVERY_DRY_RUN !== 'false', // safe by default
     }));
   }
