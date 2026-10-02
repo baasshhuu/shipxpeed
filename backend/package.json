@@ -12,7 +12,8 @@
     "dev": "tsx --env-file=.env src/server.ts",
     "typecheck": "tsc --noEmit",
     "smoke:delhivery": "tsx --env-file=.env scripts/delhivery-smoke-test.ts",
-    "smoke:bigship": "tsx --env-file=.env scripts/bigship-smoke-test.ts"
+    "smoke:bigship": "tsx --env-file=.env scripts/bigship-smoke-test.ts",
+    "test:rates": "tsx scripts/ratecard-test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

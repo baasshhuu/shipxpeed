@@ -195,7 +195,24 @@ return`<div class="row"><div><h1>Orders</h1><p class="sub" style="margin:0">${li
 ${list.length?`<div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Destination</th><th>Payment</th><th>Value</th><th>Courier</th><th>AWB</th><th>Status</th><th></th></tr>
 ${list.map(o=>`<tr><td><b>${o[0]}</b></td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${o[3]==='COD'?'<span class="b warn">COD</span>':'<span class="b mut">Prepaid</span>'}</td><td>${inr(o[4])}</td><td>${o[5]}</td><td>${o[6]}</td><td>${badge(o[7])}</td>
 <td>${o[7]==='Ready to ship'?`<button class="btn sm" data-shipnow="${o[0]}">Ship now</button>`:`<button class="btn sm sec" data-track="${o[0]}">Track</button>`}</td></tr>`).join('')}</table></div>`:`<div class="empty">No orders match. Clear the filter or create a new order.</div>`}</div>`}
-const cour=[['Delhivery',[38,46,58,70,92],[3,3,4,5,6]],['Xpressbees',[35,43,55,68,88],[3,4,4,5,7]],['Ekart',[33,41,52,64,84],[4,4,5,6,7]],['Blue Dart',[52,60,74,88,110],[2,2,3,4,5]],['DTDC',[36,45,56,69,90],[3,4,5,5,7]]];
+// ---------- Universal rate card (sample numbers for design review; real courier cards replace them) ----------
+// Every courier uses the same formula: price = zone first-slab + extra slabs, plus COD fee, RTO charge and GST.
+const ZN_SHORT=['A','B','C','D','E'];
+const ZN_DESC=['Within the same city','Within the same state','Metro to metro','Rest of India','Remote and special areas (North-East, J&K, islands)'];
+const REMOTE=['Jammu & Kashmir','Ladakh','Arunachal Pradesh','Assam','Manipur','Meghalaya','Mizoram','Nagaland','Tripura','Sikkim','Andaman & Nicobar Islands','Lakshadweep'];
+const RC={
+ c:{Delhivery:{z:[[38,30],[46,36],[58,44],[70,52],[92,70]],cod:[30,2],rto:90,eta:[3,3,4,5,6]},
+    Xpressbees:{z:[[35,28],[43,34],[55,42],[68,50],[88,66]],cod:[30,2],rto:90,eta:[3,4,4,5,7]},
+    Ekart:{z:[[33,26],[41,32],[52,40],[64,48],[84,62]],cod:[28,1.8],rto:90,eta:[4,4,5,6,7]},
+    'Blue Dart':{z:[[52,40],[60,46],[74,56],[88,66],[110,82]],cod:[35,2.2],rto:100,eta:[2,2,3,4,5]},
+    DTDC:{z:[[36,28],[45,35],[56,43],[69,51],[90,68]],cod:[30,2],rto:90,eta:[3,4,5,5,7]}},
+ m:{Delhivery:18,Xpressbees:20,Ekart:22,'Blue Dart':12,DTDC:20}, // default margin % on top of courier cost
+ sm:{} // per-seller margin overrides: sm[sellerIndex][courier] = percent
+};
+const marg=(n,si)=>{const o=RC.sm[si];return o&&o[n]!==undefined&&o[n]!==''?+o[n]:RC.m[n]};
+// cw = chargeable weight in kg, slabs of 0.5 kg. cost=true returns the courier cost, otherwise the seller price.
+function quote(n,z,cw,mode,val,si,cost){const c=RC.c[n],[a,b]=c.z[z],sl=Math.max(1,Math.ceil(cw/0.5));let f=a+(sl-1)*b,cd=mode==='COD'?Math.max(c.cod[0],val*c.cod[1]/100):0,rt=f*c.rto/100;
+ if(!cost){const m=1+marg(n,si)/100;f*=m;cd*=m;rt*=m}const gst=(f+cd)*.18;return{f,cod:cd,rto:rt,gst,total:f+cd+gst}}
 const pinCache={};
 // Looks up a pincode on api.postalpincode.in from the browser. Returns {ok:true,city,district,state}
 // or {ok:false,reason:'invalid'|'unreachable'}. If the page cannot reach the API, features fall back.
@@ -210,7 +227,7 @@ async function pinInfo(pin){
  }catch(err){return{ok:false,reason:'unreachable'}}}
 const pinText=i=>i.ok?`<span class="up">✓ ${esc(i.areas[0])}, ${esc(i.city)}, ${esc(i.state)}</span>`:i.reason==='invalid'?'<span class="dn">Pincode not found</span>':'<span class="muted">Pincode lookup unavailable here, format checked only</span>';
 const METROS=['Delhi','Mumbai','Kolkata','Chennai','Bengaluru','Hyderabad','Pune','Ahmedabad'];
-function zoneFrom(a,b,ia,ib){if(ia.ok&&ib.ok){if(ia.district===ib.district)return 0;if(ia.state===ib.state)return 1;const m=x=>METROS.some(c=>(x.city||'').toLowerCase().includes(c.toLowerCase())||(x.district||'').toLowerCase().includes(c.toLowerCase()));if(m(ia)&&m(ib))return 2;return 3}return zone(a,b)}
+function zoneFrom(a,b,ia,ib){if(ia.ok&&ib.ok){if(REMOTE.includes(ib.state))return 4;if(ia.district===ib.district)return 0;if(ia.state===ib.state)return 1;const m=x=>METROS.some(c=>(x.city||'').toLowerCase().includes(c.toLowerCase())||(x.district||'').toLowerCase().includes(c.toLowerCase()));if(m(ia)&&m(ib))return 2;return 3}return zone(a,b)}
 function zone(a,b){if(a.slice(0,3)===b.slice(0,3))return 0;if(a[0]===b[0])return 1;if(['1','4','5','6'].includes(a[0])&&['1','4','5','6'].includes(b[0]))return 2;return 3}
 const zn=['Zone A: same city','Zone B: same state','Zone C: metro','Zone D: rest of India','Zone E: remote'];
 function rate(){return`<h1>Rate calculator</h1><p class="sub">Compare couriers for a shipment before you create it.</p>
@@ -229,7 +246,7 @@ out.innerHTML='<div class="card" style="margin-top:12px">Checking pincodes…</d
 $('#rph').innerHTML=pinText(ia);$('#rdh').innerHTML=pinText(ib);
 if(ia.reason==='invalid'||ib.reason==='invalid'){out.innerHTML=`<div class="card" style="margin-top:12px"><span class="b bad">Pincode not found</span> ${ia.reason==='invalid'?p:d} is not a valid Indian pincode.</div>`;return}
 const vol=l*b*h/5000,ch=Math.max(w,vol),z=zoneFrom(p,d,ia,ib),slab=Math.max(1,Math.ceil(ch/0.5));
-const rows=cour.map(c=>{const base=c[1][z===4?4:Math.min(z,3)+0]*1;const f=c[1][Math.min(z,4)]+(slab-1)*(c[1][Math.min(z,4)]*0.55);const codf=cod?Math.max(30,v*0.02):0;const rto=f*0.9;const gst=(f+codf)*0.18;return{n:c[0],eta:c[2][Math.min(z,4)],f,codf,rto,gst,t:f+codf+gst}}).sort((a,b)=>a.t-b.t);
+const rows=Object.keys(RC.c).map(n=>{const q=quote(n,z,ch,cod?'COD':'Prepaid',v,meIdx);return{n,eta:RC.c[n].eta[z],f:q.f,codf:q.cod,rto:q.rto,gst:q.gst,t:q.total}}).sort((a,b)=>a.t-b.t);
 const fast=Math.min(...rows.map(r=>r.eta));
 out.innerHTML=`<div class="stat"><span>Volumetric weight <b>${vol.toFixed(2)} kg</b></span><span>Chargeable <b>${ch.toFixed(2)} kg</b></span><span>Zone <b>${zn[z]}</b></span><span>Route <b>${ia.ok?esc(ia.city):p} to ${ib.ok?esc(ib.city):d}</b></span><span>Rates <span class="b warn">SANDBOX / MOCK</span></span>${ia.ok&&ib.ok?'':'<span class="b mut">Zone estimated: pincode lookup unavailable</span>'}</div>
 <div class="card"><div class="tw"><table><tr><th>Courier</th><th>Delivery ETA</th><th>Freight</th><th>COD fee</th><th>RTO charge</th><th>GST</th><th>Total</th><th></th></tr>
@@ -273,10 +290,10 @@ const me={name:'Aarav Textiles'};
 let kyc={status:'Approved',flags:{Business:1,Documents:1,Bank:1}},docs={PAN:1,Aadhaar:1,GST:1,Cheque:1};
 let sellers=[['Aarav Textiles','Pune','Approved',12480,412,true],['Greenleaf Organics','Bengaluru','Under review',0,0,true],['Kumar Electronics','Delhi','Under review',2200,0,true],['Mehta Jewellers','Surat','Changes requested',0,0,true],['Desai Home Decor','Ahmedabad','Approved',8640,286,true],['Nair Spices','Kochi','Approved',15210,533,false]];
 const cl=['Delhivery','Xpressbees','Ekart','Blue Dart','DTDC','Shadowfax','Amazon Shipping','Ecom Express','Aramex','DHL'];
-const cost={Delhivery:52,Xpressbees:48,Ekart:46,'Blue Dart':74,DTDC:50},mg={Delhivery:18,Xpressbees:20,Ekart:22,'Blue Dart':12,DTDC:20};
-const navs={seller:['Dashboard','Orders','Shipments','Rate calculator','NDR','RTO','COD','Wallet','KYC','Reports','Integrations','API','Support'],admin:['Overview','Sellers','KYC review','Couriers','Rates & margin']};
+
+const navs={seller:['Dashboard','Orders','Shipments','Rate calculator','Rate card','NDR','RTO','COD','Wallet','KYC','Reports','Integrations','API','Support'],admin:['Overview','Sellers','KYC review','Couriers','Rate cards']};
 ic.KYC='<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m9 12 2 2 4-4"/>';
-Object.assign(ic,{Overview:ic.Dashboard,Sellers:ic.Orders,'KYC review':ic.KYC,Couriers:ic.Shipments,'Rates & margin':ic.Wallet});
+Object.assign(ic,{Overview:ic.Dashboard,Sellers:ic.Orders,'KYC review':ic.KYC,Couriers:ic.Shipments,'Rate cards':ic.Wallet,'Rate card':ic.Wallet});
 const kb=s=>`<span class="b ${{Approved:'ok','Under review':'info','Not started':'mut',Rejected:'bad','Changes requested':'warn'}[s]||'mut'}">${s}</span>`;
 function buildNav(){$('#nav').innerHTML=navs[role].map(p=>`<button data-go="${p}"><svg viewBox="0 0 24 24">${ic[p]}</svg>${p}</button>`).join('')}
 function enter(){$('#login').style.display='none';document.querySelector('.app').style.display='';buildNav();window.scrollTo(0,0);render();if(role==='seller'&&kyc.status!=='Approved')toast('Complete KYC to start shipping')}
@@ -317,7 +334,33 @@ return`<h1>Couriers</h1><p class="sub">Connect courier partners. Each one is a s
 <div class="card"><h2>${n}</h2>${on?`<div class="form"><label>Environment<select><option>Production</option><option>Staging</option></select></label><label>Pickup warehouse name<input placeholder="As registered with ${n}"></label><label>API token<input value="Stored on the server" disabled></label><label>Safety mode<select><option>Dry run (read only)</option><option>Live shipments</option></select></label></div>
 <div class="chips" style="margin-top:12px">${['COD','Prepaid','RTO','Reverse pickup','International'].map((x,i)=>`<label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" ${i<4?'checked':''}> ${x}</label>`).join('')}</div>
 <div class="chips" style="margin-top:14px"><button class="btn" data-toast="Settings saved">Save settings</button><button class="btn sec" data-toast="Demo result only: the real connection test runs on your server">Test connection</button></div><p class="sub" style="font-size:13px;margin:12px 0 0">Secrets never go in this page. They live in the server's .env file and are encrypted at rest.</p>`:`<p class="sub">Not connected yet. Adding ${n} means writing its adapter on the server and adding its credentials there.</p><button class="btn sec" data-toast="${n} adapter queued for the next build">Queue ${n} adapter</button>`}</div>`}
-function amar(){return`<h1>Rates and margin</h1><p class="sub">Sellers only ever see the Seller price column. Cost and margin stay internal.</p><div class="card tw"><table><tr><th>Courier</th><th>Courier cost (500 g, Zone C)</th><th>Margin %</th><th>Seller price</th><th>Your margin</th></tr>${Object.keys(cost).map(c=>{const p=Math.round(cost[c]*(1+mg[c]/100));return`<tr><td><b>${c}</b></td><td>${inr(cost[c])}</td><td><input type="number" min="0" max="100" value="${mg[c]}" data-mg="${c}" style="width:80px;margin:0" aria-label="${c} margin percent"></td><td><b>${inr(p)}</b></td><td class="up">${inr(p-cost[c])}</td></tr>`}).join('')}</table></div>`}
+let rcc='Delhivery',rsi=0;
+const inpS='width:84px;margin:0;padding:6px 8px';
+function rcard(){const names=Object.keys(RC.c),c=RC.c[rcc],sl=n=>(a)=>quote(n,a,0.5,'Prepaid',0,meIdx),ex=(n,z)=>quote(n,z,1,'Prepaid',0,meIdx).f-quote(n,z,0.5,'Prepaid',0,meIdx).f;
+const q1=quote(rcc,2,0.8,'Prepaid',0,meIdx),m1=quote(rcc,2,0.8,'COD',1299,meIdx);
+return`<h1>Rate card</h1><p class="sub">Your shipping prices by zone, for every courier. Prices are before GST. <span class="b warn">SAMPLE RATES</span></p>
+<div class="chips" style="margin-bottom:14px">${names.map(n=>`<button class="chip ${n===rcc?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+<div class="card tw"><table><tr><th>Zone</th><th>Covers</th><th>First 500 g</th><th>Each extra 500 g</th><th>Delivery time</th></tr>
+${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b></td><td>${ZN_DESC[i]}</td><td>${inr(quote(rcc,i,0.5,'Prepaid',0,meIdx).f)}</td><td>${inr(ex(rcc,i))}</td><td>${c.eta[i]} days</td></tr>`).join('')}</table></div>
+<div class="grid2" style="margin-top:14px;grid-template-columns:1fr 1fr"><section class="card"><h2>Extra charges</h2><div class="stat" style="flex-direction:column;gap:6px;margin:0"><span>COD fee <b>${inr(quote(rcc,0,0.5,'COD',0,meIdx).cod)} or ${(c.cod[1]*(1+marg(rcc,meIdx)/100)).toFixed(2)}% of order value, whichever is higher</b></span><span>RTO (return) charge <b>${c.rto}% of the forward freight</b></span><span>GST <b>18% on freight and COD fee</b></span></div></section>
+<section class="card"><h2>Worked example</h2><p class="sub" style="margin:0;font-size:14px">0.8 kg parcel, Zone C (metro to metro), ${esc(rcc)}</p><div class="stat" style="flex-direction:column;gap:4px;margin:10px 0 0"><span>Prepaid: freight ${inr(q1.f)} + GST ${inr(q1.gst)} = <b>${inr(q1.total)}</b></span><span>COD, ₹1,299 order: freight ${inr(m1.f)} + COD fee ${inr(m1.cod)} + GST ${inr(m1.gst)} = <b>${inr(m1.total)}</b></span></div></section></div>
+<section class="card" style="margin-top:14px"><h2>All couriers, first 500 g (prepaid)</h2><div class="tw"><table><tr><th>Zone</th>${names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>
+${ZN_SHORT.map((z,i)=>{const v=names.map(n=>quote(n,i,0.5,'Prepaid',0,meIdx).f),lo=Math.min(...v);return`<tr><td><b>Zone ${z}</b></td>${v.map(x=>`<td>${x===lo?'<b class="up">'+inr(x)+'</b>':inr(x)}</td>`).join('')}</tr>`}).join('')}</table></div>
+<p class="sub" style="margin:10px 0 0;font-size:13px">Weight is rounded up to the next 500 g. The larger of actual and volumetric weight is charged (length × breadth × height ÷ 5000).</p></section>`}
+function arc(){const names=Object.keys(RC.c),c=RC.c[rcc],ok=sellers[rsi]||sellers[0];
+const num=(v,k,x)=>`<input type="number" min="0" step="any" style="${inpS}" value="${v}" data-rc="${k}" aria-label="${esc(k)}">`;
+return`<h1>Rate cards</h1><p class="sub">Set what each courier charges you, then the margin you add for sellers. Sellers only see their own price. <span class="b warn">SAMPLE RATES</span></p>
+<section class="card"><h2>1. Courier cost card</h2><div class="chips" style="margin-bottom:12px">${names.map(n=>`<button class="chip ${n===rcc?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+<div class="tw"><table><tr><th>Zone</th><th>First 500 g (₹)</th><th>Each extra 500 g (₹)</th><th>Delivery days</th></tr>
+${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b> <span class="muted">${ZN_DESC[i]}</span></td><td>${num(c.z[i][0],'z|'+i+'|0')}</td><td>${num(c.z[i][1],'z|'+i+'|1')}</td><td>${num(c.eta[i],'eta|'+i)}</td></tr>`).join('')}</table></div>
+<div class="form" style="margin-top:14px;grid-template-columns:repeat(4,1fr)"><label>COD minimum fee (₹)${num(c.cod[0],'cod|0')}</label><label>COD fee (% of order value)${num(c.cod[1],'cod|1')}</label><label>RTO charge (% of freight)${num(c.rto,'rto')}</label><label>Default margin (%)${num(RC.m[rcc],'m')}</label></div>
+<p class="sub" style="margin:10px 0 0;font-size:13px">Courier cost is what the courier bills you. Seller price = cost × (1 + margin %). Changes apply to the calculator and every seller's rate card at once.</p></section>
+<section class="card" style="margin-top:14px"><h2>2. Seller margins</h2><label style="max-width:320px">Seller<select id="rsel" data-rsel>${sellers.map((x,i)=>`<option value="${i}" ${i===rsi?'selected':''}>${esc(x[0])}</option>`).join('')}</select></label>
+<div class="tw" style="margin-top:12px"><table><tr><th>Courier</th><th>Default margin</th><th>This seller's margin (%)</th><th>Margin now</th><th>Zone C, first 500 g: cost</th><th>Seller price</th><th>Your profit</th></tr>
+${names.map(n=>{const o=(RC.sm[rsi]||{})[n],cost=quote(n,2,0.5,'Prepaid',0,rsi,true).f,pr=quote(n,2,0.5,'Prepaid',0,rsi).f;return`<tr><td><b>${esc(n)}</b></td><td>${RC.m[n]}%</td><td><input type="number" min="0" max="100" step="any" style="${inpS}" placeholder="${RC.m[n]}" value="${o===undefined?'':o}" data-sm="${esc(n)}" aria-label="${esc(n)} margin for ${esc(ok[0])}"></td><td><b>${marg(n,rsi)}%</b> ${o!==undefined&&o!==''?'<span class="b info">Custom</span>':'<span class="b mut">Default</span>'}</td><td>${inr(cost)}</td><td><b>${inr(pr)}</b></td><td class="up">${inr(pr-cost)}</td></tr>`}).join('')}</table></div>
+<div class="chips" style="margin-top:12px"><button class="btn sec" data-rsreset>Reset ${esc(ok[0])} to default margins</button></div></section>
+<section class="card" style="margin-top:14px"><h2>3. Price preview for ${esc(ok[0])} (first 500 g, prepaid)</h2><div class="tw"><table><tr><th>Zone</th>${names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>
+${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b></td>${names.map(n=>`<td>${inr(quote(n,i,0.5,'Prepaid',0,rsi).f)}</td>`).join('')}</tr>`).join('')}</table></div></section>`}
 function newOrder(){
  if(kyc.status!=='Approved'){toast('Get your KYC approved before creating shipments');return}
  $('#dr').innerHTML=`<div class="row"><h1 style="font-size:20px;margin:0">Create order</h1><button class="ib" data-close aria-label="Close">✕</button></div>
@@ -340,7 +383,7 @@ async function saveOrder(){const g=i=>$(i).value.trim(),e=m=>{$('#oe').textConte
  $('#dr').classList.remove('open');toast('Order '+id+' created. Choose a courier next.');render()}
 function other(p){return`<h1>${p}</h1><p class="sub">This screen is queued for the next design pass.</p><div class="card empty">Dashboard, Orders and Rate calculator are ready to review. Tell me which screen to design next.</div>`}
 function render(){const ad=role==='admin';$('#wb').style.display=ad?'none':'';$('#wb').textContent=inr(bal());$('#out').textContent=ad?'A':'R';
-const v=(ad?{Overview:aov,Sellers:asel,'KYC review':akyc,Couriers:acour,'Rates & margin':amar}:{Dashboard:dash,Orders:ord,Shipments:ship,'Rate calculator':rate,NDR:ndrp,Wallet:wallet,KYC:kycp})[cur];$('#page').innerHTML=v?v():other(cur);
+const v=(ad?{Overview:aov,Sellers:asel,'KYC review':akyc,Couriers:acour,'Rate cards':arc}:{Dashboard:dash,Orders:ord,Shipments:ship,'Rate calculator':rate,'Rate card':rcard,NDR:ndrp,Wallet:wallet,KYC:kycp})[cur];$('#page').innerHTML=v?v():other(cur);
 document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.go===cur));
 if(cur==='Rate calculator'){$('#rgo').onclick=calc;calc()}
 const oq=$('#oq');if(oq)oq.oninput=e=>{q=e.target.value.toLowerCase();const pos=e.target.selectionStart;render();const n=$('#oq');n.focus();n.setSelectionRange(pos,pos)}}
@@ -392,7 +435,7 @@ async function shipCancel(sid){const oid=document.querySelector('[data-shipcance
  try{await sapi('POST','/api/shipments/'+sid+'/cancel');o[5]='—';o[6]='—';o[7]='Ready to ship';delete o[9];$('#dr').classList.remove('open');toast('Shipment cancelled. Order is ready to ship again.');render()}catch(x){toast(x.message)}}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2400)}
 function closeNav(){$('#side').classList.remove('open');$('#scrim').classList.remove('show')}
-document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-shipnow],[data-srvlogin],[data-shipgo],[data-shipcancel],[data-toast]');if(!t)return;
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-shipnow],[data-rcc],[data-rsreset],[data-srvlogin],[data-shipgo],[data-shipcancel],[data-toast]');if(!t)return;
 if(t.dataset.go){cur=t.dataset.go;closeNav();$('#dr').classList.remove('open');window.scrollTo(0,0);render()}
 else if(t.dataset.range){range=t.dataset.range;render()}
 else if(t.dataset.sf){sf=t.dataset.sf;render()}
@@ -406,6 +449,8 @@ else if(t.dataset.lt){lt=t.dataset.lt;showLogin()}
 else if(t.hasAttribute('data-lsw')){signup=!signup;showLogin()}
 else if(t.dataset.tab){kt=t.dataset.tab;render()}
 else if(t.dataset.doc){docs[t.dataset.doc]=1;toast('Document uploaded');render()}
+else if(t.dataset.rcc){rcc=t.dataset.rcc;render()}
+else if(t.hasAttribute('data-rsreset')){delete RC.sm[rsi];toast('Margins reset to default');render()}
 else if(t.dataset.shipnow)shipNow(t.dataset.shipnow)
 else if(t.hasAttribute('data-srvlogin'))srvLogin()
 else if(t.dataset.shipgo)shipGo(t.dataset.shipgo)
@@ -421,7 +466,12 @@ else if(t.dataset.gate){toast(kyc.status==='Approved'?t.dataset.gate:'Get your K
 else toast(t.dataset.toast)});
 document.addEventListener('input',e=>{if(e.target.dataset&&e.target.dataset.pin&&/^\d{6}$/.test(e.target.value.trim()))e.target.dispatchEvent(new Event('change',{bubbles:true}))});
 document.addEventListener('change',async e=>{const pn=e.target.dataset&&e.target.dataset.pin;if(pn){const h=document.getElementById(pn),v=e.target.value.trim();if(h){if(!/^\d{6}$/.test(v)){h.innerHTML=v?'<span class="dn">Enter 6 digits</span>':'';}else{h.textContent='Checking…';const i=await pinInfo(v);h.innerHTML=pinText(i);const f=e.target.dataset.fill;if(f&&i.ok)document.getElementById(f).value=i.city+', '+i.state}}}
-const m=e.target.dataset&&e.target.dataset.mg;if(m){mg[m]=Math.max(0,Math.min(100,+e.target.value||0));render()}});
+const d=e.target.dataset||{};
+if(d.rc){const p=d.rc.split('|'),v=+e.target.value;if(!(v>=0)||e.target.value===''){toast('Enter a number, 0 or more');render();return}const c=RC.c[rcc];
+ if(p[0]==='z')c.z[+p[1]][+p[2]]=v;else if(p[0]==='eta')c.eta[+p[1]]=Math.max(1,Math.round(v));else if(p[0]==='cod')c.cod[+p[1]]=v;else if(p[0]==='rto')c.rto=Math.min(300,v);else if(p[0]==='m')RC.m[rcc]=Math.min(100,v);
+ toast(rcc+' rate card updated');render()}
+else if(d.sm){const t=e.target.value.trim();RC.sm[rsi]=RC.sm[rsi]||{};if(t===''){delete RC.sm[rsi][d.sm]}else{const v=+t;if(!(v>=0&&v<=100)){toast('Margin must be between 0 and 100');render();return}RC.sm[rsi][d.sm]=v}toast('Margin saved for '+sellers[rsi][0]);render()}
+else if(d.rsel!==undefined){rsi=+e.target.value;render()}});
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#dr').classList.remove('open')});
 $('#out').onclick=()=>{$('#dr').classList.remove('open');role=null;signup=false;showLogin()};
 $('#menu').onclick=()=>{$('#side').classList.add('open');$('#scrim').classList.add('show')};

@@ -88,3 +88,12 @@ this project yet. Do the first real booking with one test order and check it in 
 
 Tested here against a local pretend Delhivery server: login, validation, dry run, live booking,
 no double booking, cancel, static files, path traversal.
+
+## Rate cards
+
+All couriers are priced by one formula in `src/rates/ratecard.ts` (zone A to E, 500 g slabs,
+COD fee = larger of a minimum or a percent, RTO as a percent of freight, 18% GST). A courier is
+just a rate card (data). Seller price = courier cost x (1 + margin %), where the margin is the
+seller's own override or the courier default. Run the checks with `npm run test:rates`.
+The numbers in the panel are SAMPLE rates until you load each courier's real rate card.
+Admin edits in the panel are in memory only for now; saving them to a database is the next step.

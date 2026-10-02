@@ -1,0 +1,18 @@
+import { quote, zoneFor, effectiveMargin, chargeableKg, type CourierRateCard } from '../src/rates/ratecard';
+const card: CourierRateCard = { zones: [[38, 30], [46, 36], [58, 44], [70, 52], [92, 70]], cod: { min: 30, percent: 2 }, rtoPercent: 90, etaDays: [3, 3, 4, 5, 6] };
+let bad = 0; const eq = (n: string, a: number, b: number) => { const ok = Math.abs(a - b) < 0.005; if (!ok) bad++; console.log(ok ? 'PASS' : 'FAIL', n, a, b); };
+eq('0.5kg zone A cost', quote(card, 0, 0.5, 'Prepaid', 0).freight, 38);
+eq('0.8kg zone C cost = 58+44', quote(card, 2, 0.8, 'Prepaid', 0).freight, 102);
+eq('seller price +18%', quote(card, 2, 0.8, 'Prepaid', 0, 18).freight, 102 * 1.18);
+eq('gst', quote(card, 2, 0.8, 'Prepaid', 0, 18).gst, 102 * 1.18 * 0.18);
+eq('cod uses min when % smaller', quote(card, 0, 0.5, 'COD', 500).codFee, 30);
+eq('cod uses % when larger', quote(card, 0, 0.5, 'COD', 2000).codFee, 40);
+eq('rto 90% of freight', quote(card, 0, 0.5, 'Prepaid', 0).rto, 34.2);
+eq('2.1kg = 5 slabs', quote(card, 0, 2.1, 'Prepaid', 0).freight, 38 + 4 * 30);
+eq('volumetric', chargeableKg(0.5, 30, 20, 10), 1.2);
+eq('override beats default', effectiveMargin(18, 5), 5);
+eq('null uses default', effectiveMargin(18, null), 18);
+const delhi = { city: 'Delhi', district: 'Central Delhi', state: 'Delhi' }, mum = { city: 'Mumbai', district: 'Mumbai', state: 'Maharashtra' }, gu = { city: 'Guwahati', district: 'Kamrup', state: 'Assam' };
+eq('zone metro', zoneFor(delhi, mum), 2); eq('zone remote', zoneFor(delhi, gu), 4); eq('zone same city', zoneFor(delhi, delhi), 0);
+let threw = false; try { quote(card, 0, 0, 'Prepaid', 0); } catch { threw = true; } if (!threw) bad++; console.log(threw ? 'PASS' : 'FAIL', 'zero weight rejected');
+process.exit(bad ? 1 : 0);
