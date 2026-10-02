@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shipxpeed – Ship with every courier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0f19;--s1:#111826;--s2:#18223a;--text:#eaf0fb;--mut:#8f9bb3;--line:#222d45;--brand:#7c9cff;--bi:#0a1020;--tape:#f5c518;--ti:#2b2200;--ok:#4fd1a1;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#f4f6fb;--s1:#fff;--s2:#eef2fa;--text:#14213d;--mut:#5d6985;--line:#dfe5f1;--brand:#2f5bea;--bi:#fff;--ok:#12805c;color-scheme:light}}
+:root[data-theme="light"]{--bg:#f4f6fb;--s1:#fff;--s2:#eef2fa;--text:#14213d;--mut:#5d6985;--line:#dfe5f1;--brand:#2f5bea;--bi:#fff;--ok:#12805c;color-scheme:light}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 "Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--brand);outline-offset:3px}
+.w{max-width:1160px;margin:0 auto;padding:0 max(16px,env(safe-area-inset-left,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:18px;height:64px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:800;font-size:19px;letter-spacing:-.02em}
+.logo i{width:28px;height:28px;border-radius:8px;background:var(--tape);color:var(--ti);display:grid;place-items:center;font-style:normal;box-shadow:0 0 22px rgba(245,197,24,.3)}
+.nav{display:flex;gap:2px;margin-left:12px}
+.nav a{padding:8px 12px;border-radius:9px;color:var(--mut);font-size:15px;transition:.15s}
+.nav a:hover,.nav a.on{color:var(--text);background:var(--s1)}
+.sp{flex:1}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:none;border-radius:11px;padding:10px 18px;font-weight:600;cursor:pointer;transition:transform .12s,filter .15s,background .15s}
+.btn:hover{background:var(--s1)}.btn:active{transform:scale(.97)}
+.btn.p{background:var(--brand);color:var(--bi);border-color:transparent}.btn.p:hover{filter:brightness(1.08);background:var(--brand)}
+.btn.y{background:var(--tape);color:var(--ti);border-color:transparent}.btn.y:hover{filter:brightness(1.06);background:var(--tape)}
+.burger{display:none;border:1px solid var(--line);background:none;border-radius:9px;width:40px;height:40px;cursor:pointer}
+main>*{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+.hero{padding:72px 0 56px;display:grid;grid-template-columns:1.15fr 1fr;gap:48px;align-items:center}
+h1{font-size:clamp(34px,5.2vw,58px);line-height:1.04;letter-spacing:-.035em;margin:0 0 18px;font-weight:800}
+h1 em{font-style:normal;color:var(--tape)}
+.lead{color:var(--mut);font-size:18px;max-width:30em;margin:0 0 26px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.pill{display:inline-block;border:1px solid var(--line);color:var(--mut);border-radius:99px;padding:4px 12px;font-size:13px;margin-bottom:18px}
+.pill b{color:var(--ok)}
+.quote{background:var(--s1);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 30px 60px rgba(0,0,0,.25)}
+.route{position:relative;height:64px;margin:4px 0 14px}
+.route svg{width:100%;height:100%}
+.route path{stroke:var(--brand);stroke-width:2;fill:none;stroke-dasharray:5 7;animation:dash 1.4s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-24}}
+.q2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{display:block;font-size:13px;color:var(--mut)}
+input,select,textarea{width:100%;margin-top:4px;background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 25%,transparent)}
+.msg{margin-top:12px;font-size:14px;color:var(--mut);min-height:22px}
+.msg b{color:var(--text)}
+section{padding:56px 0}
+h2{font-size:clamp(26px,3.6vw,38px);letter-spacing:-.025em;line-height:1.1;margin:0 0 10px;font-weight:800}
+.sub{color:var(--mut);max-width:36em;margin:0 0 30px}
+.strip{display:flex;gap:10px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--s1);border-radius:12px;padding:10px 16px;font-weight:600;display:flex;align-items:center;gap:8px}
+.chip small{color:var(--mut);font-weight:500;font-size:12px}
+.chip.on small{color:var(--ok)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;counter-reset:s}
+.step,.card{background:var(--s1);border:1px solid var(--line);border-radius:16px;padding:20px;transition:transform .2s,border-color .2s}
+.step:hover,.card:hover{transform:translateY(-3px);border-color:var(--brand)}
+.step::before{counter-increment:s;content:"0" counter(s);display:block;color:var(--tape);font-weight:800;margin-bottom:10px}
+.step b,.card b{display:block;font-size:17px;margin-bottom:4px}
+.step span,.card span{color:var(--mut);font-size:15px}
+.bento{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.bento .wide{grid-column:span 2}
+.tag{display:inline-block;font-size:12px;border-radius:99px;padding:2px 10px;background:var(--s2);color:var(--mut);margin-bottom:10px}
+.three{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.code{background:#070b13;border:1px solid var(--line);border-radius:14px;padding:18px;font:13.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;color:#cfe0ff;margin:0}
+.code i{color:#f5c518;font-style:normal}
+.cta{background:linear-gradient(120deg,#22336b,#17203a 60%,#3a2f0a);border:1px solid var(--line);border-radius:24px;padding:44px;text-align:center;margin:20px 0 56px}
+.cta h2{color:#eaf0fb}.cta p{color:#b8c3dc;margin:0 auto 22px;max-width:30em}
+details{border-bottom:1px solid var(--line);padding:16px 0}
+summary{cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between}
+summary::after{content:"+";color:var(--mut)}details[open] summary::after{content:"–"}
+details p{color:var(--mut);margin:10px 0 0;max-width:46em}
+footer{border-top:1px solid var(--line);padding:40px 0 30px;color:var(--mut);font-size:14px}
+.fg{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:28px;margin-bottom:28px}
+.fg b{display:block;color:var(--text);margin-bottom:8px}.fg a{display:block;padding:3px 0}.fg a:hover{color:var(--text)}
+.tl{list-style:none;padding:0;margin:18px 0 0}
+.tl li{position:relative;padding:0 0 16px 26px;color:var(--mut)}
+.tl li::before{content:"";position:absolute;left:3px;top:6px;width:11px;height:11px;border-radius:50%;background:var(--ok)}
+.tl li::after{content:"";position:absolute;left:8px;top:18px;bottom:-6px;width:2px;background:var(--line)}
+.tl li:last-child::after{display:none}.tl li b{color:var(--text)}
+.ph{padding:56px 0 8px}
+@media (max-width:900px){
+.hero{grid-template-columns:1fr;padding:40px 0}.steps,.three{grid-template-columns:1fr 1fr}.bento{grid-template-columns:1fr}.bento .wide{grid-column:auto}
+.nav,.bar>.btn:not(.p){display:none}.burger{display:block}.nav.open{display:flex;flex-direction:column;position:absolute;top:64px;left:0;right:0;background:var(--bg);padding:10px 16px;border-bottom:1px solid var(--line)}
+.fg{grid-template-columns:1fr 1fr}.cta{padding:30px 20px}}
+@media (max-width:560px){.steps,.three,.q2{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header><div class="w bar">
+<a class="logo" href="#/home"><i>S</i>Shipxpeed</a>
+<nav class="nav" id="nav" aria-label="Main">
+<a href="#/features">Features</a><a href="#/pricing">Pricing</a><a href="#/couriers">Couriers</a><a href="#/developers">Developers</a><a href="#/track">Track order</a><a href="#/contact">Contact</a></nav>
+<span class="sp"></span>
+<a class="btn" href="APP" >Log in</a>
+<a class="btn y p" href="APP"  style="background:var(--tape);color:var(--ti)">Start free</a>
+<button class="burger" id="bg" aria-label="Menu">☰</button>
+</div></header>
+<main id="v"></main>
+<footer><div class="w">
+<div class="fg">
+<div><a class="logo" href="#/home" style="margin-bottom:10px"><i>S</i>Shipxpeed</a>One dashboard for every courier. Built for Indian online sellers.</div>
+<div><b>Product</b><a href="#/features">Features</a><a href="#/pricing">Pricing</a><a href="#/couriers">Courier partners</a><a href="#/track">Track order</a></div>
+<div><b>Build</b><a href="#/developers">API for developers</a><a href="#/developers">Webhooks</a><a href="APP" >Demo dashboard</a></div>
+<div><b>Company</b><a href="#/contact">Contact us</a><a href="APP" >Seller login</a><a href="APP" >Admin login</a></div>
+</div>© 2026 Shipxpeed. All rights reserved.</div></footer>
+<script>
+const APP='/app/';
+document.querySelectorAll('a[href="APP"]').forEach(a=>a.href=APP);
+const $=s=>document.querySelector(s);
+const cta=`<div class="cta"><h2>Ready to ship smarter?</h2><p>Create a free seller account, finish KYC and start comparing couriers in minutes.</p><div class="row" style="justify-content:center"><a class="btn y" href="${APP}" >Start free</a><a class="btn" href="#/contact" style="border-color:#4a5880">Talk to us</a></div></div>`;
+const faq=[['Do I need separate accounts with each courier?','No. You connect once to Shipxpeed and compare couriers from one dashboard. Shipxpeed manages the courier connections.'],['How does COD work?','Cash collected on delivery is tracked per shipment, and settlement follows the cycle set by your plan. You see expected, collected and settled amounts in one place.'],['Can I ship from more than one location?','Yes. Add several warehouses and pick a default. Each order can ship from any of them.'],['What happens if a delivery fails?','Failed deliveries land in your NDR list. You can request a reattempt, correct the address, message the customer, cancel, or send the parcel back.'],['Is my data private?','Each seller sees only their own orders, wallet and reports. Courier credentials are kept on the server and never shown in the browser.']];
+const pages={
+home:()=>`<div class="w"><div class="hero"><div>
+<span class="pill"><b>●</b> Multi-courier shipping for India</span>
+<h1>Every courier. <em>One dashboard.</em></h1>
+<p class="lead">Compare rates, book shipments, print labels and track every parcel across couriers, without juggling logins.</p>
+<div class="row"><a class="btn y" href="${APP}" >Start free</a><a class="btn" href="${APP}" >See the dashboard</a></div></div>
+<div class="quote"><b>Check a route</b>
+<div class="route"><svg viewBox="0 0 400 64" preserveAspectRatio="none"><path d="M10 50 C120 -10, 280 -10, 390 40"/><circle cx="10" cy="50" r="5" fill="var(--tape)"/><circle cx="390" cy="40" r="5" fill="var(--ok)"/></svg></div>
+<div class="q2"><label>Pickup pincode<input id="qf" inputmode="numeric" maxlength="6" placeholder="110001"></label><label>Delivery pincode<input id="qt" inputmode="numeric" maxlength="6" placeholder="400001"></label>
+<label>Weight (kg)<input id="qw" type="number" min="0.1" step="0.1" value="0.5"></label><label>Payment<select id="qp"><option>Prepaid</option><option>COD</option></select></label></div>
+<button class="btn p" id="qb" style="width:100%;margin-top:14px;justify-content:center">Compare couriers</button><div class="msg" id="qm" role="status"></div></div></div></div>
+<div class="w"><section style="padding-top:8px"><div class="strip"><span class="chip">Delhivery <small>integration pending</small></span><span class="chip">Bigship <small>integration pending</small></span><span class="chip">Xpressbees <small>coming</small></span><span class="chip">Ekart <small>coming</small></span><span class="chip">Blue Dart <small>coming</small></span><span class="chip">DTDC <small>coming</small></span></div></section>
+<section><h2>From order to doorstep in four steps</h2><p class="sub">Simple enough for a first-time seller, deep enough for a growing brand.</p>
+<div class="steps"><div class="step"><b>Add orders</b><span>Create one, upload a sheet, or sync from your store.</span></div><div class="step"><b>Compare couriers</b><span>See price, delivery time and COD support side by side.</span></div><div class="step"><b>Ship and print</b><span>Book with one click, get the AWB and a ready label.</span></div><div class="step"><b>Track and settle</b><span>Follow every parcel, handle NDR and reconcile COD.</span></div></div></section>
+<section><h2>Everything a seller needs</h2><p class="sub">The tools that keep deliveries on time and cash flowing.</p>
+<div class="bento"><div class="card wide"><span class="tag">Rates</span><b>Pick the best courier for every parcel</b><span>Chargeable weight, zone, COD fee and RTO charge are shown before you ship, so there are no surprises on the invoice.</span></div>
+<div class="card"><span class="tag">COD</span><b>Cash on delivery, tracked</b><span>Expected, collected and settled, per shipment.</span></div>
+<div class="card"><span class="tag">NDR</span><b>Fix failed deliveries fast</b><span>Reattempt, change address or message the buyer.</span></div>
+<div class="card"><span class="tag">Wallet</span><b>A ledger you can trust</b><span>Every rupee in and out is recorded.</span></div>
+<div class="card"><span class="tag">Integrations</span><b>Connect your store and API</b><span>Shopify, WooCommerce and a simple REST API.</span></div></div>
+<div style="margin-top:18px"><a class="btn" href="#/features">See all features</a></div></section>
+<section><h2>Built for how you sell</h2><p class="sub">Whatever the size of your catalog, the workflow stays simple.</p>
+<div class="three"><div class="card"><b>Online brands</b><span>Own website sellers who want lower shipping cost and fewer returns.</span></div><div class="card"><b>Social sellers</b><span>Instagram and WhatsApp shops that need fast, low-effort shipping.</span></div><div class="card"><b>Growing businesses</b><span>Multiple warehouses, teams and channels under one account.</span></div></div></section>
+<section><h2>Questions, answered</h2><div style="margin-top:18px">${faq.map(f=>`<details><summary>${f[0]}</summary><p>${f[1]}</p></details>`).join('')}</div></section>${cta}</div>`,
+features:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Features</h1><p class="lead">Everything from the first order to the final settlement.</p></div><section style="padding-top:20px"><div class="three">${[['Rate calculator','Compare couriers by price and delivery time before you book.'],['Bulk order upload','Upload a CSV or Excel sheet. Errors show row by row so you can fix and re-upload.'],['Multiple warehouses','Ship from any pickup location and set a default.'],['Labels and manifests','Print A4 or thermal labels and create pickup manifests.'],['Live tracking','One standard timeline across every courier.'],['NDR and RTO','Act on failed deliveries and see where returns come from.'],['COD reconciliation','Know what is collected, pending and settled.'],['Wallet and invoices','Recharge, see every debit and download GST invoices.'],['Weight disputes','Raise a dispute with evidence when charges look wrong.']].map(f=>`<div class="card"><b>${f[0]}</b><span>${f[1]}</span></div>`).join('')}</div></section>${cta}</div>`,
+pricing:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Simple pricing</h1><p class="lead">No setup fee. You see your exact shipping rates inside the dashboard once you sign up.</p></div><section style="padding-top:20px"><div class="three">
+<div class="card"><span class="tag">Starter</span><b>For new sellers</b><span>Single warehouse, rate comparison, labels, tracking and wallet.</span></div>
+<div class="card" style="border-color:var(--brand)"><span class="tag">Growth</span><b>For growing brands</b><span>Everything in Starter plus multiple warehouses, NDR tools, COD reports and store integrations.</span></div>
+<div class="card"><span class="tag">Enterprise</span><b>For high volume</b><span>Custom rate cards, API access, dedicated support and team roles.</span></div></div>
+<p class="sub" style="margin-top:22px">Shipping rates depend on weight, zone and courier. Create an account to see rates for your lanes.</p></section>${cta}</div>`,
+couriers:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Courier partners</h1><p class="lead">Each courier is connected one at a time and tested before it goes live. Status shown is the real status.</p></div><section style="padding-top:20px"><div class="three">${[['Delhivery','Integration pending',1],['Bigship','Integration pending',1],['Xpressbees','Coming soon',0],['Ekart','Coming soon',0],['Blue Dart','Coming soon',0],['DTDC','Coming soon',0],['Shadowfax','Coming soon',0],['Amazon Shipping','Coming soon',0],['Ecom Express','Coming soon',0]].map(c=>`<div class="card"><span class="tag" style="${c[2]?'color:var(--ok)':''}">${c[1]}</span><b>${c[0]}</b><span>${c[2]?'Adapter built. Live testing and credentials come next.':'Not started. Needs API documentation and credentials.'}</span></div>`).join('')}</div><p class="sub" style="margin-top:22px">Need a courier that is not listed? <a href="#/contact" style="color:var(--brand)">Tell us</a>.</p></section></div>`,
+developers:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Built for developers</h1><p class="lead">A clean REST API and webhooks, so your store or software can ship without the dashboard. Preview below; full docs are published at launch.</p></div><section style="padding-top:20px"><div class="three" style="grid-template-columns:1fr 1fr"><pre class="code"><i>POST</i> /shipments
+{
+  "order_id": "SX-10482",
+  "courier": "auto",
+  "payment_mode": "Prepaid",
+  "weight_g": 500
+}
+
+<i>GET</i>  /tracking/:awb
+<i>GET</i>  /rates
+<i>GET</i>  /serviceability
+<i>GET</i>  /wallet</pre><div><div class="card" style="margin-bottom:14px"><b>Webhooks</b><span>Get a call when a shipment is picked up, out for delivery, delivered, in NDR or returned.</span></div><div class="card"><b>API keys</b><span>Create and revoke keys from your dashboard. Keys are scoped to your account only.</span></div></div></div></section>${cta}</div>`,
+track:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Track your order</h1><p class="lead">Enter your AWB number to see where your parcel is.</p></div><section style="padding-top:20px;max-width:560px"><label>AWB number<input id="ta" placeholder="e.g. SXDEMO123"></label><button class="btn p" id="tb" style="margin-top:12px">Track</button><div id="tr"></div></section></div>`,
+contact:()=>`<div class="w"><div class="ph"><h1 style="font-size:clamp(30px,4.4vw,46px)">Talk to us</h1><p class="lead">Questions about rates, KYC or integrations? Leave a note.</p></div><section style="padding-top:20px;max-width:560px"><label>Name<input id="cn"></label><label style="margin-top:12px">Email<input id="ce" type="email"></label><label style="margin-top:12px">Message<textarea id="cm" rows="4"></textarea></label><button class="btn p" id="cb" style="margin-top:14px">Send message</button><div class="msg" id="cr" role="status"></div></section></div>`};
+const titles={home:'Ship with every courier',features:'Features',pricing:'Pricing',couriers:'Courier partners',developers:'Developers',track:'Track order',contact:'Contact'};
+function bind(){
+const g=id=>document.getElementById(id);
+if(g('qb'))g('qb').onclick=()=>{const f=g('qf').value.trim(),t=g('qt').value.trim(),w=+g('qw').value;
+ g('qm').innerHTML=!/^\d{6}$/.test(f)||!/^\d{6}$/.test(t)?'Enter two 6-digit pincodes.':!(w>0)?'Enter a weight above 0 kg.':`Route <b>${f} to ${t}</b>, ${w} kg, ${g('qp').value}. <a href="${APP}"  style="color:var(--brand);text-decoration:underline">Create a free account</a> to see live courier rates.`};
+if(g('tb'))g('tb').onclick=()=>{const a=g('ta').value.trim();g('tr').innerHTML=a.length<5?'<p class="sub" style="margin-top:14px">Enter a valid AWB number.</p>':`<p class="sub" style="margin:16px 0 0">Demo timeline for <b style="color:var(--text)">${a.replace(/[<>&"']/g,'')}</b>. Live tracking starts when courier connections go live.</p><ul class="tl"><li><b>Order created</b></li><li><b>Pickup scheduled</b></li><li><b>In transit</b></li></ul>`};
+if(g('cb'))g('cb').onclick=()=>{g('cr').textContent=!g('cn').value.trim()||!/^\S+@\S+\.\S+$/.test(g('ce').value)||!g('cm').value.trim()?'Please fill in your name, a valid email and a message.':'Thanks. This is a demo form, so nothing is sent yet.'}}
+function route(){const k=location.hash.replace('#/','')||'home',p=pages[k]?k:'home';$('#v').innerHTML=pages[p]();document.title='Shipxpeed – '+titles[p];
+document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#/'+p));$('#nav').classList.remove('open');window.scrollTo(0,0);bind()}
+$('#bg').onclick=()=>$('#nav').classList.toggle('open');
+addEventListener('hashchange',route);route();
+</script>
+</body>
+</html>
