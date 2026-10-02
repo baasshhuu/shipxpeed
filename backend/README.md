@@ -1,4 +1,4 @@
-# Shipxpeed backend: courier layer (Delhivery first)
+# FastShip backend: courier layer (Delhivery first)
 
 ## Run the read-only check
 

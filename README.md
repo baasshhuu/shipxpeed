@@ -1,4 +1,4 @@
-# Shipxpeed
+# FastShip
 
 Multi-courier shipping aggregator for Indian e-commerce sellers.
 

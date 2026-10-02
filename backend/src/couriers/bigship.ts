@@ -187,7 +187,7 @@ export class BigshipAdapter implements CourierAdapter {
   }
 
   async generateManifest(): Promise<never> {
-    throw new UnsupportedError(this.code, 'bulk manifests (Shipxpeed generates its own)');
+    throw new UnsupportedError(this.code, 'bulk manifests (FastShip generates its own)');
   }
 
   async trackShipment(awb: string): Promise<TrackingResult> {

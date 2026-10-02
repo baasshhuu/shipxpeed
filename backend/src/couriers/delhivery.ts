@@ -113,14 +113,14 @@ export class DelhiveryAdapter implements CourierAdapter {
   }
 
   async generateLabel(awb: string, size: 'A4' | '4R' = 'A4'): Promise<LabelResult> {
-    // VERIFY: packing slip response shape. Shipxpeed-branded labels are rendered
+    // VERIFY: packing slip response shape. FastShip-branded labels are rendered
     // by our own PDF generator from the AWB and order data.
     const d = await this.call<any>(`/api/p/packing_slip?wbns=${encodeURIComponent(awb)}&pdf=true&pdf_size=${size}`);
     return { awb, url: d?.packages?.[0]?.pdf_download_link ?? d?.pdf_download_link, raw: d };
   }
 
   async generateManifest(): Promise<never> {
-    throw new UnsupportedError(this.code, 'manifest generation (Shipxpeed generates manifests itself)');
+    throw new UnsupportedError(this.code, 'manifest generation (FastShip generates manifests itself)');
   }
 
   async trackShipment(awb: string): Promise<TrackingResult> {

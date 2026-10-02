@@ -196,4 +196,4 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: 'Something went wrong on the server' });
   }
 });
-server.listen(PORT, () => console.log(`Shipxpeed server on :${PORT}. Couriers: ${[...couriers.keys()].join(', ') || 'none configured'}`));
+server.listen(PORT, () => console.log(`FastShip server on :${PORT}. Couriers: ${[...couriers.keys()].join(', ') || 'none configured'}`));

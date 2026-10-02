@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Shipxpeed – Seller dashboard</title>
+<title>FastShip – Seller dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23f5c518%27/%3E%3Cg fill=%27none%27 stroke=%27%232b2200%27 stroke-width=%273.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Cpath d=%27M14 25l4.2-18H26M15.5 16h8%27/%3E%3Cpath d=%27M5 12h6M4 19h6%27/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -121,7 +122,7 @@ button.av{border:0;cursor:pointer;font-size:15px}
 <div id="login"></div>
 <div class="app" style="display:none">
 <aside class="side" id="side">
-<div class="logo"><i>S</i>Shipxpeed</div>
+<div class="logo"><i><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l3.2-14H20M11.8 12h6"/><path d="M3 9h5M2 14h5"/></svg></i>FastShip</div>
 <nav class="nav" id="nav"></nav>
 </aside>
 <div class="scrim" id="scrim"></div>
@@ -153,16 +154,16 @@ const pages=Object.keys(ic);let cur='Dashboard',range='Last 7 days';
 const inr=n=>'₹'+Math.round(n).toLocaleString('en-IN');
 const badge=s=>{const m={Delivered:'ok','In transit':'info','Out for delivery':'info',NDR:'warn','RTO initiated':'bad','Pickup scheduled':'mut','Ready to ship':'mut',Cancelled:'bad'};return`<span class="b ${m[s]||'mut'}">${s}</span>`};
 const DEMO_ORDERS=[
-['SX-10482','Aarav Mehta','Pune 411001','Prepaid',1299,'Delhivery','DL7788120934','Delivered'],
-['SX-10481','Sneha Iyer','Chennai 600042','COD',899,'Xpressbees','XB4410029871','Out for delivery'],
-['SX-10480','Rohit Verma','Lucknow 226010','COD',1599,'Ekart','EK2200918347','NDR'],
-['SX-10479','Pooja Nair','Kochi 682016','Prepaid',2499,'Blue Dart','BD9001173620','In transit'],
-['SX-10478','Imran Khan','Jaipur 302017','COD',749,'DTDC','DT5532018846','RTO initiated'],
-['SX-10477','Kavya Reddy','Hyderabad 500081','Prepaid',3199,'Delhivery','DL7788120102','In transit'],
-['SX-10476','Vikram Singh','Delhi 110045','COD',1099,'Shadowfax','SF1208873345','Delivered'],
-['SX-10475','Anita Desai','Surat 395007','Prepaid',1850,'—','—','Ready to ship'],
-['SX-10474','Manoj Gupta','Patna 800001','COD',999,'Xpressbees','XB4410029455','Pickup scheduled'],
-['SX-10473','Divya Rao','Mysuru 570001','Prepaid',1450,'—','—','Cancelled']];
+['FS-10482','Aarav Mehta','Pune 411001','Prepaid',1299,'Delhivery','DL7788120934','Delivered'],
+['FS-10481','Sneha Iyer','Chennai 600042','COD',899,'Xpressbees','XB4410029871','Out for delivery'],
+['FS-10480','Rohit Verma','Lucknow 226010','COD',1599,'Ekart','EK2200918347','NDR'],
+['FS-10479','Pooja Nair','Kochi 682016','Prepaid',2499,'Blue Dart','BD9001173620','In transit'],
+['FS-10478','Imran Khan','Jaipur 302017','COD',749,'DTDC','DT5532018846','RTO initiated'],
+['FS-10477','Kavya Reddy','Hyderabad 500081','Prepaid',3199,'Delhivery','DL7788120102','In transit'],
+['FS-10476','Vikram Singh','Delhi 110045','COD',1099,'Shadowfax','SF1208873345','Delivered'],
+['FS-10475','Anita Desai','Surat 395007','Prepaid',1850,'—','—','Ready to ship'],
+['FS-10474','Manoj Gupta','Patna 800001','COD',999,'Xpressbees','XB4410029455','Pickup scheduled'],
+['FS-10473','Divya Rao','Mysuru 570001','Prepaid',1450,'—','—','Cancelled']];
 let orders=DEMO_ORDERS.map(o=>[...o]);
 const ranges={'Today':[.14,.14],'Yesterday':[.13,.13],'Last 7 days':[1,1],'Last 30 days':[4.2,4.2],'Custom date':[2.2,2.2]};
 function dash(){if(!orders.length)return`<h1>Welcome, ${esc(me.name)}</h1><p class="sub">Your dashboard fills up as you ship. Start with these steps.</p><div class="card"><div class="stat" style="flex-direction:column;gap:8px"><span>${kyc.status==='Approved'?'✓':'○'} Complete KYC <b>(${kyc.status})</b></span><span>${bal()>0?'✓':'○'} Add money to your wallet</span><span>○ Create your first order</span></div><div class="chips"><button class="btn" data-go="KYC">Go to KYC</button><button class="btn sec" data-go="Wallet">Add money</button><button class="btn sec" data-neworder>Create order</button></div></div>`;const k=ranges[range][0];const n=v=>Math.round(v*k).toLocaleString('en-IN');
@@ -183,13 +184,13 @@ return`<div class="row"><div><h1>Dashboard</h1><p class="sub" style="margin:0">Y
 <div class="grid2"><section class="card"><h2>Orders by day</h2><div class="bars">${days.map((v,i)=>`<div><span>${v}</span><i style="height:${v*1.25}px"></i>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]}</div>`).join('')}</div></section>
 <section class="card"><h2>Courier delivery rate</h2>${[['Delhivery',94],['Xpressbees',91],['Ekart',88],['Blue Dart',96],['DTDC',85]].map(c=>`<div class="hb"><div><span>${c[0]}</span><b>${c[1]}%</b></div><p><i style="width:${c[1]}%"></i></p></div>`).join('')}</section></div>
 <section class="card"><h2>Needs your attention</h2><div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Issue</th><th>Courier</th><th></th></tr>
-<tr><td>SX-10480</td><td>Rohit Verma</td><td><span class="b warn">NDR: customer unavailable</span></td><td>Ekart</td><td><button class="btn sm" data-toast="Reattempt requested for SX-10480">Reattempt</button></td></tr>
-<tr><td>SX-10478</td><td>Imran Khan</td><td><span class="b bad">RTO initiated</span></td><td>DTDC</td><td><button class="btn sm sec" data-track="SX-10478">View</button></td></tr></table></div></section>`}
+<tr><td>FS-10480</td><td>Rohit Verma</td><td><span class="b warn">NDR: customer unavailable</span></td><td>Ekart</td><td><button class="btn sm" data-toast="Reattempt requested for FS-10480">Reattempt</button></td></tr>
+<tr><td>FS-10478</td><td>Imran Khan</td><td><span class="b bad">RTO initiated</span></td><td>DTDC</td><td><button class="btn sm sec" data-track="FS-10478">View</button></td></tr></table></div></section>`}
 let q='',sf='All';
 function ord(){const list=orders.filter(o=>(sf==='All'||o[7]===sf)&&(o.join(' ').toLowerCase().includes(q)));
 const sts=['All','Ready to ship','In transit','Out for delivery','Delivered','NDR','RTO initiated','Cancelled'];
 return`<div class="row"><div><h1>Orders</h1><p class="sub" style="margin:0">${list.length} of ${orders.length} orders</p></div>
-<div class="chips"><button class="btn sec" data-toast="Template downloaded: shipxpeed-orders.csv">Download CSV template</button><button class="btn sec" data-toast="Choose a CSV or Excel file to upload">Bulk upload</button><button class="btn" data-neworder>Create order</button></div></div>
+<div class="chips"><button class="btn sec" data-toast="Template downloaded: fastship-orders.csv">Download CSV template</button><button class="btn sec" data-toast="Choose a CSV or Excel file to upload">Bulk upload</button><button class="btn" data-neworder>Create order</button></div></div>
 <div class="card"><div class="row"><input id="oq" style="max-width:320px;margin:0" placeholder="Search orders" value="${esc(q)}"><div class="chips">${sts.map(s=>`<button class="chip ${s===sf?'on':''}" data-sf="${s}">${s}</button>`).join('')}</div></div>
 ${list.length?`<div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Destination</th><th>Payment</th><th>Value</th><th>Courier</th><th>AWB</th><th>Status</th><th></th></tr>
 ${list.map(o=>`<tr><td><b>${o[0]}</b></td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${o[3]==='COD'?'<span class="b warn">COD</span>':'<span class="b mut">Prepaid</span>'}</td><td>${inr(o[4])}</td><td>${o[5]}</td><td>${o[6]}</td><td>${badge(o[7])}</td>
@@ -233,8 +234,8 @@ const fast=Math.min(...rows.map(r=>r.eta));
 out.innerHTML=`<div class="stat"><span>Volumetric weight <b>${vol.toFixed(2)} kg</b></span><span>Chargeable <b>${ch.toFixed(2)} kg</b></span><span>Zone <b>${zn[z]}</b></span><span>Route <b>${ia.ok?esc(ia.city):p} to ${ib.ok?esc(ib.city):d}</b></span><span>Rates <span class="b warn">SANDBOX / MOCK</span></span>${ia.ok&&ib.ok?'':'<span class="b mut">Zone estimated: pincode lookup unavailable</span>'}</div>
 <div class="card"><div class="tw"><table><tr><th>Courier</th><th>Delivery ETA</th><th>Freight</th><th>COD fee</th><th>RTO charge</th><th>GST</th><th>Total</th><th></th></tr>
 ${rows.map((r,i)=>`<tr><td><b>${r.n}</b> ${i===0?'<span class="b ok">Cheapest</span>':''} ${r.eta===fast&&i!==0?'<span class="b info">Fastest</span>':''}</td><td>${r.eta} days</td><td>${inr(r.f)}</td><td>${r.codf?inr(r.codf):'—'}</td><td>${inr(r.rto)}</td><td>${inr(r.gst)}</td><td><b>${inr(r.t)}</b></td><td><button class="btn sm ${i?'sec':''}" data-toast="${r.n} selected. Shipment and label would be created next.">Select</button></td></tr>`).join('')}</table></div></div>`}
-const DEMO_NDR=[['SX-10480','Rohit Verma','Customer unavailable',1,'Ekart','Today'],['SX-10469','Neha Joshi','Address incomplete',2,'Delhivery','Today'],['SX-10463','Sameer Ali','Refused by customer',1,'Xpressbees','Yesterday'],['SX-10458','Tanya Bose','Phone not reachable',3,'DTDC','Yesterday']];
-const DEMO_LEDGER=[['Recharge','PAY-2291',0,20000],['Shipment debit','SX-10466 to 10470',2860,0],['Shipment debit','SX-10471',1240,0],['Refund','SX-10465',0,300],['Penalty','Weight difference, DL7788120102',180,0],['Shipment debit','SX-10472',1980,0],['Shipment debit','SX-10474',1560,0]];
+const DEMO_NDR=[['FS-10480','Rohit Verma','Customer unavailable',1,'Ekart','Today'],['FS-10469','Neha Joshi','Address incomplete',2,'Delhivery','Today'],['FS-10463','Sameer Ali','Refused by customer',1,'Xpressbees','Yesterday'],['FS-10458','Tanya Bose','Phone not reachable',3,'DTDC','Yesterday']];
+const DEMO_LEDGER=[['Recharge','PAY-2291',0,20000],['Shipment debit','FS-10466 to 10470',2860,0],['Shipment debit','FS-10471',1240,0],['Refund','FS-10465',0,300],['Penalty','Weight difference, DL7788120102',180,0],['Shipment debit','FS-10472',1980,0],['Shipment debit','FS-10474',1560,0]];
 let ndr=DEMO_NDR.map(n=>[...n]),ledger=DEMO_LEDGER.map(e=>[...e]);
 function loadAccount(blank){orders=blank?[]:DEMO_ORDERS.map(o=>[...o]);ndr=blank?[]:DEMO_NDR.map(n=>[...n]);ledger=blank?[]:DEMO_LEDGER.map(e=>[...e]);kyc=blank?{status:'Not started',flags:{}}:{status:'Approved',flags:{Business:1,Documents:1,Bank:1}};docs=blank?{}:{PAN:1,Aadhaar:1,GST:1,Cheque:1};me.name=blank?me.name:'Aarav Textiles';meIdx=blank?meIdx:0}
 const bal=()=>ledger.reduce((s,e)=>s+e[3]-e[2],0);
@@ -280,7 +281,7 @@ const kb=s=>`<span class="b ${{Approved:'ok','Under review':'info','Not started'
 function buildNav(){$('#nav').innerHTML=navs[role].map(p=>`<button data-go="${p}"><svg viewBox="0 0 24 24">${ic[p]}</svg>${p}</button>`).join('')}
 function enter(){$('#login').style.display='none';document.querySelector('.app').style.display='';buildNav();window.scrollTo(0,0);render();if(role==='seller'&&kyc.status!=='Approved')toast('Complete KYC to start shipping')}
 function showLogin(){const L=$('#login');L.style.display='grid';document.querySelector('.app').style.display='none';
-L.innerHTML=`<section class="hero"><div class="logo" style="padding:0"><i>S</i>Shipxpeed</div><h2>Ship with every courier from one dashboard</h2><p>Compare rates, create orders, track deliveries and reconcile COD across couriers.</p></section>
+L.innerHTML=`<section class="hero"><div class="logo" style="padding:0"><i><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 19l3.2-14H20M11.8 12h6"/><path d="M3 9h5M2 14h5"/></svg></i>FastShip</div><h2>Ship with every courier from one dashboard</h2><p>Compare rates, create orders, track deliveries and reconcile COD across couriers.</p></section>
 <section class="box"><h1>${signup?'Create seller account':'Welcome back'}</h1><p class="sub">${signup?'Takes two minutes. KYC comes next.':'Log in to continue'}</p>
 ${signup?'':`<div class="tabs">${['Seller','Admin'].map(t=>`<button type="button" data-lt="${t}" class="${t===lt?'on':''}">${t} login</button>`).join('')}</div>`}
 ${signup?`<label>Full name<input id="ln" autocomplete="name"></label><label style="margin-top:10px">Business name<input id="lb"></label><label style="margin-top:10px">Mobile number<input id="lm" inputmode="numeric" maxlength="10"></label>`:''}
@@ -334,7 +335,7 @@ async function saveOrder(){const g=i=>$(i).value.trim(),e=m=>{$('#oe').textConte
  if(!/^[6-9]\d{9}$/.test(g('#op')))return e('Enter a valid 10-digit mobile number.');
  if(!(+g('#ov')>0)||!(+g('#ow')>0))return e('Enter a value and weight above 0.');
  const i=await pinInfo(g('#oz'));if(i.reason==='invalid')return e('Pincode not found.');
- const id='SX-'+(10483+orders.filter(o=>+o[0].slice(3)>10482).length);
+ const id='FS-'+(10483+orders.filter(o=>+o[0].slice(3)>10482).length);
  orders.unshift([id,g('#on'),(i.ok?i.city:'—')+' '+g('#oz'),$('#om').value,+g('#ov'),'—','—','Ready to ship',{phone:g('#op'),addr:g('#oa'),pin:g('#oz'),city:i.ok?i.city:'',state:i.ok?i.state:'',prod:g('#opr'),kg:+g('#ow')}]);
  $('#dr').classList.remove('open');toast('Order '+id+' created. Choose a courier next.');render()}
 function other(p){return`<h1>${p}</h1><p class="sub">This screen is queued for the next design pass.</p><div class="card empty">Dashboard, Orders and Rate calculator are ready to review. Tell me which screen to design next.</div>`}
@@ -343,7 +344,7 @@ const v=(ad?{Overview:aov,Sellers:asel,'KYC review':akyc,Couriers:acour,'Rates &
 document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.go===cur));
 if(cur==='Rate calculator'){$('#rgo').onclick=calc;calc()}
 const oq=$('#oq');if(oq)oq.oninput=e=>{q=e.target.value.toLowerCase();const pos=e.target.selectionStart;render();const n=$('#oq');n.focus();n.setSelectionRange(pos,pos)}}
-// ---------- Live shipping through the Shipxpeed server (same address that serves this page) ----------
+// ---------- Live shipping through the FastShip server (same address that serves this page) ----------
 const SRV={token:null,health:null};
 async function sapi(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',...(SRV.token?{Authorization:'Bearer '+SRV.token}:{})},body:b?JSON.stringify(b):undefined});
  let d=null;try{d=await r.json()}catch{}
@@ -354,7 +355,7 @@ async function shipNow(id){const o=orders.find(x=>x[0]===id);if(!o)return;
  shipForm(o)}
 function shipForm(o,msg){const id=o[0],d=o[8]||{},h=SRV.health,m=(o[2].match(/^(.*?)\s*(\d{6})$/)||[]);
  const head=`<div class="row"><h1 style="font-size:20px;margin:0">Ship ${esc(id)}</h1><button class="ib" data-close aria-label="Close">✕</button></div>`;
- if(!h)return $('#dr').innerHTML=head+`<div class="card"><b>Shipping server not connected</b><p class="sub" style="font-size:13px">Real shipments are created by the Shipxpeed server, not by this page alone. Open the panel from your server address (for example http://localhost:3000/app/) after starting it. Steps are in the README.</p></div>`;
+ if(!h)return $('#dr').innerHTML=head+`<div class="card"><b>Shipping server not connected</b><p class="sub" style="font-size:13px">Real shipments are created by the FastShip server, not by this page alone. Open the panel from your server address (for example http://localhost:3000/app/) after starting it. Steps are in the README.</p></div>`;
  if(!h.couriers.length)return $('#dr').innerHTML=head+`<div class="card"><b>No courier configured</b><p class="sub" style="font-size:13px">Add DELHIVERY_API_TOKEN to the server's .env file and restart it.</p></div>`;
  if(!SRV.token)return $('#dr').innerHTML=head+`<p class="sub">Enter the server password (ADMIN_PASSWORD from the .env file) to ship.</p><label>Server password<input id="spw" type="password" autocomplete="off"></label><div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-srvlogin data-oid="${esc(id)}">Connect</button>`;
  const pay=o[3];
