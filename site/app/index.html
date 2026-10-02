@@ -193,7 +193,7 @@ return`<div class="row"><div><h1>Orders</h1><p class="sub" style="margin:0">${li
 <div class="card"><div class="row"><input id="oq" style="max-width:320px;margin:0" placeholder="Search orders" value="${esc(q)}"><div class="chips">${sts.map(s=>`<button class="chip ${s===sf?'on':''}" data-sf="${s}">${s}</button>`).join('')}</div></div>
 ${list.length?`<div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Destination</th><th>Payment</th><th>Value</th><th>Courier</th><th>AWB</th><th>Status</th><th></th></tr>
 ${list.map(o=>`<tr><td><b>${o[0]}</b></td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${o[3]==='COD'?'<span class="b warn">COD</span>':'<span class="b mut">Prepaid</span>'}</td><td>${inr(o[4])}</td><td>${o[5]}</td><td>${o[6]}</td><td>${badge(o[7])}</td>
-<td>${o[7]==='Ready to ship'?`<button class="btn sm" data-go="Rate calculator">Ship now</button>`:`<button class="btn sm sec" data-track="${o[0]}">Track</button>`}</td></tr>`).join('')}</table></div>`:`<div class="empty">No orders match. Clear the filter or create a new order.</div>`}</div>`}
+<td>${o[7]==='Ready to ship'?`<button class="btn sm" data-shipnow="${o[0]}">Ship now</button>`:`<button class="btn sm sec" data-track="${o[0]}">Track</button>`}</td></tr>`).join('')}</table></div>`:`<div class="empty">No orders match. Clear the filter or create a new order.</div>`}</div>`}
 const cour=[['Delhivery',[38,46,58,70,92],[3,3,4,5,6]],['Xpressbees',[35,43,55,68,88],[3,4,4,5,7]],['Ekart',[33,41,52,64,84],[4,4,5,6,7]],['Blue Dart',[52,60,74,88,110],[2,2,3,4,5]],['DTDC',[36,45,56,69,90],[3,4,5,5,7]]];
 const pinCache={};
 // Looks up a pincode on api.postalpincode.in from the browser. Returns {ok:true,city,district,state}
@@ -335,7 +335,7 @@ async function saveOrder(){const g=i=>$(i).value.trim(),e=m=>{$('#oe').textConte
  if(!(+g('#ov')>0)||!(+g('#ow')>0))return e('Enter a value and weight above 0.');
  const i=await pinInfo(g('#oz'));if(i.reason==='invalid')return e('Pincode not found.');
  const id='SX-'+(10483+orders.filter(o=>+o[0].slice(3)>10482).length);
- orders.unshift([id,g('#on'),(i.ok?i.city:'—')+' '+g('#oz'),$('#om').value,+g('#ov'),'—','—','Ready to ship']);
+ orders.unshift([id,g('#on'),(i.ok?i.city:'—')+' '+g('#oz'),$('#om').value,+g('#ov'),'—','—','Ready to ship',{phone:g('#op'),addr:g('#oa'),pin:g('#oz'),city:i.ok?i.city:'',state:i.ok?i.state:'',prod:g('#opr'),kg:+g('#ow')}]);
  $('#dr').classList.remove('open');toast('Order '+id+' created. Choose a courier next.');render()}
 function other(p){return`<h1>${p}</h1><p class="sub">This screen is queued for the next design pass.</p><div class="card empty">Dashboard, Orders and Rate calculator are ready to review. Tell me which screen to design next.</div>`}
 function render(){const ad=role==='admin';$('#wb').style.display=ad?'none':'';$('#wb').textContent=inr(bal());$('#out').textContent=ad?'A':'R';
@@ -343,9 +343,55 @@ const v=(ad?{Overview:aov,Sellers:asel,'KYC review':akyc,Couriers:acour,'Rates &
 document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('on',b.dataset.go===cur));
 if(cur==='Rate calculator'){$('#rgo').onclick=calc;calc()}
 const oq=$('#oq');if(oq)oq.oninput=e=>{q=e.target.value.toLowerCase();const pos=e.target.selectionStart;render();const n=$('#oq');n.focus();n.setSelectionRange(pos,pos)}}
+// ---------- Live shipping through the Shipxpeed server (same address that serves this page) ----------
+const SRV={token:null,health:null};
+async function sapi(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',...(SRV.token?{Authorization:'Bearer '+SRV.token}:{})},body:b?JSON.stringify(b):undefined});
+ let d=null;try{d=await r.json()}catch{}
+ if(!r.ok){if(r.status===401)SRV.token=null;const e=new Error((d&&d.error)||'Server error '+r.status);e.status=r.status;throw e}return d}
+async function shipNow(id){const o=orders.find(x=>x[0]===id);if(!o)return;
+ $('#dr').innerHTML=`<div class="row"><h1 style="font-size:20px;margin:0">Ship ${esc(id)}</h1><button class="ib" data-close aria-label="Close">✕</button></div><p class="sub">Checking the shipping server...</p>`;$('#dr').classList.add('open');
+ try{SRV.health=await sapi('GET','/api/health')}catch{SRV.health=null}
+ shipForm(o)}
+function shipForm(o,msg){const id=o[0],d=o[8]||{},h=SRV.health,m=(o[2].match(/^(.*?)\s*(\d{6})$/)||[]);
+ const head=`<div class="row"><h1 style="font-size:20px;margin:0">Ship ${esc(id)}</h1><button class="ib" data-close aria-label="Close">✕</button></div>`;
+ if(!h)return $('#dr').innerHTML=head+`<div class="card"><b>Shipping server not connected</b><p class="sub" style="font-size:13px">Real shipments are created by the Shipxpeed server, not by this page alone. Open the panel from your server address (for example http://localhost:3000/app/) after starting it. Steps are in the README.</p></div>`;
+ if(!h.couriers.length)return $('#dr').innerHTML=head+`<div class="card"><b>No courier configured</b><p class="sub" style="font-size:13px">Add DELHIVERY_API_TOKEN to the server's .env file and restart it.</p></div>`;
+ if(!SRV.token)return $('#dr').innerHTML=head+`<p class="sub">Enter the server password (ADMIN_PASSWORD from the .env file) to ship.</p><label>Server password<input id="spw" type="password" autocomplete="off"></label><div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-srvlogin data-oid="${esc(id)}">Connect</button>`;
+ const pay=o[3];
+ $('#dr').innerHTML=head+`<p class="sub">${esc(o[1])}, ${pay==='COD'?'COD '+inr(o[4]):'Prepaid '+inr(o[4])}</p>
+ <label>Courier<select id="sc">${h.couriers.map(c=>`<option value="${esc(c)}">${esc(c[0].toUpperCase()+c.slice(1))}</option>`).join('')}</select></label>
+ <label style="margin-top:10px">Phone<input id="sph" inputmode="numeric" maxlength="10" value="${esc(d.phone||'')}"></label>
+ <label style="margin-top:10px">Address<input id="sad" value="${esc(d.addr||'')}"></label>
+ <label style="margin-top:10px">Pincode<input id="spn" inputmode="numeric" maxlength="6" value="${esc(d.pin||m[2]||'')}"></label>
+ <label style="margin-top:10px">City<input id="sci" value="${esc(d.city||m[1]||'')}"></label>
+ <label style="margin-top:10px">State<input id="sst" value="${esc(d.state||'')}"></label>
+ <label style="margin-top:10px">Product<input id="spr" value="${esc(d.prod||'')}"></label>
+ <label style="margin-top:10px">Weight (kg)<input id="swt" type="number" step="0.1" min="0.1" value="${d.kg||0.5}"></label>
+ <div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-shipgo="${esc(id)}">Create shipment</button>
+ <p class="sub" style="font-size:12px;margin-top:10px">Your server decides if this is a dry run or a real booking (DELHIVERY_DRY_RUN in .env).</p>`}
+async function srvLogin(){const oid=document.querySelector('[data-srvlogin]').dataset.oid,o=orders.find(x=>x[0]===oid);
+ try{SRV.token=(await sapi('POST','/api/login',{password:$('#spw').value})).token;shipForm(o)}catch(e){shipForm(o,e.message)}}
+async function shipGo(id){const o=orders.find(x=>x[0]===id),g=i=>$(i).value.trim(),e=m=>{$('#se').textContent=m};
+ if(!/^[6-9]\d{9}$/.test(g('#sph')))return e('Enter a valid 10-digit mobile number.');
+ if(!g('#sad')||!g('#sci')||!g('#sst')||!g('#spr'))return e('Fill address, city, state and product.');
+ if(!/^\d{6}$/.test(g('#spn')))return e('Enter a 6-digit pincode.');
+ if(!(+g('#swt')>0))return e('Weight must be above 0.');
+ o[8]={phone:g('#sph'),addr:g('#sad'),pin:g('#spn'),city:g('#sci'),state:g('#sst'),prod:g('#spr'),kg:+g('#swt')};
+ const btn=document.querySelector('[data-shipgo]');btn.disabled=true;btn.textContent='Creating...';e('');
+ try{const r=await sapi('POST','/api/shipments',{courier:g('#sc'),orderId:id,to:{name:o[1],phone:o[8].phone,line1:o[8].addr,city:o[8].city,state:o[8].state,pincode:o[8].pin},
+   parcel:{paymentMode:o[3],declaredValue:o[4],codAmount:o[3]==='COD'?o[4]:undefined,weightGrams:Math.round(o[8].kg*1000),productDescription:o[8].prod,quantity:1}});
+  const s=r.shipment;o[9]=s.id;
+  if(!s.dryRun){o[5]=s.courier[0].toUpperCase()+s.courier.slice(1);o[6]=s.awb;o[7]='Pickup scheduled'}
+  $('#dr').innerHTML=`<div class="row"><h1 style="font-size:20px;margin:0">${s.dryRun?'Dry run complete':'Shipment created'}</h1><button class="ib" data-close aria-label="Close">✕</button></div>
+  <div class="card"><p class="sub" style="margin:0">AWB</p><b style="font-size:20px">${esc(s.awb)}</b><p class="sub" style="font-size:13px">${esc(s.courier)} for ${esc(id)}${r.reused?' (already existed, nothing new was booked)':''}</p></div>
+  ${r.notice?`<div class="card" style="margin-top:10px"><b class="dn">${esc(r.notice)}</b></div>`:''}
+  ${s.dryRun?'':`<button class="btn sec" style="margin-top:12px" data-shipcancel="${esc(s.id)}" data-oid="${esc(id)}">Cancel this shipment</button>`}`;
+  render()}catch(x){if(x.status===401)return shipForm(o,'Session expired. Connect again.');btn.disabled=false;btn.textContent='Create shipment';e(x.message)}}
+async function shipCancel(sid){const oid=document.querySelector('[data-shipcancel]').dataset.oid,o=orders.find(x=>x[0]===oid);
+ try{await sapi('POST','/api/shipments/'+sid+'/cancel');o[5]='—';o[6]='—';o[7]='Ready to ship';delete o[9];$('#dr').classList.remove('open');toast('Shipment cancelled. Order is ready to ship again.');render()}catch(x){toast(x.message)}}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2400)}
 function closeNav(){$('#side').classList.remove('open');$('#scrim').classList.remove('show')}
-document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-toast]');if(!t)return;
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-shipnow],[data-srvlogin],[data-shipgo],[data-shipcancel],[data-toast]');if(!t)return;
 if(t.dataset.go){cur=t.dataset.go;closeNav();$('#dr').classList.remove('open');window.scrollTo(0,0);render()}
 else if(t.dataset.range){range=t.dataset.range;render()}
 else if(t.dataset.sf){sf=t.dataset.sf;render()}
@@ -359,6 +405,10 @@ else if(t.dataset.lt){lt=t.dataset.lt;showLogin()}
 else if(t.hasAttribute('data-lsw')){signup=!signup;showLogin()}
 else if(t.dataset.tab){kt=t.dataset.tab;render()}
 else if(t.dataset.doc){docs[t.dataset.doc]=1;toast('Document uploaded');render()}
+else if(t.dataset.shipnow)shipNow(t.dataset.shipnow)
+else if(t.hasAttribute('data-srvlogin'))srvLogin()
+else if(t.dataset.shipgo)shipGo(t.dataset.shipgo)
+else if(t.dataset.shipcancel)shipCancel(t.dataset.shipcancel)
 else if(t.hasAttribute('data-neworder'))newOrder()
 else if(t.hasAttribute('data-ordsave'))saveOrder()
 else if(t.dataset.save){kyc.flags[t.dataset.save]=1;toast(t.dataset.save+' details saved');render()}

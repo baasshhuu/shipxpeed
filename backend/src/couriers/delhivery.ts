@@ -18,6 +18,7 @@ export interface DelhiveryConfig {
   sellerGstTin?: string;  // mandatory on shipment creation per Delhivery's order-creation docs
   hsnCode?: string;       // mandatory on shipment creation per Delhivery's order-creation docs
   dryRun?: boolean;       // true = never create/cancel/book anything, only read
+  baseUrl?: string;       // override for tests only (a local fake Delhivery server)
 }
 
 export function normalizeStatus(status: string, type = ''): NormalizedStatus {
@@ -41,7 +42,8 @@ export class DelhiveryAdapter implements CourierAdapter {
     if (!cfg.token) throw new Error('DELHIVERY_API_TOKEN is missing');
   }
 
-  private get base() { return BASES[this.cfg.env ?? 'staging']; }
+  private get base() { return this.cfg.baseUrl ?? BASES[this.cfg.env ?? 'staging']; }
+  get isDryRun() { return !!this.cfg.dryRun; }
 
   private async call<T>(path: string, init: Parameters<typeof request>[1] = {}): Promise<T> {
     const headers = { Authorization: `Token ${this.cfg.token}`, Accept: 'application/json', ...(init.headers as object) };

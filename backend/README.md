@@ -52,3 +52,39 @@ Notes:
 - Bigship is production only, so keep `BIGSHIP_DRY_RUN=true` until the smoke test passes.
 - `VERIFY` comments in `bigship.ts` mark where the PDF is ambiguous (weight units, GST in
   totals, invoiceType, GET bodies, category ids).
+
+## Run the server (create shipments and assign to Delhivery)
+
+Needs Node.js 20 or newer.
+
+```
+cd backend
+npm install
+cp .env.example .env     # then edit .env (see below)
+npm run build
+npm start
+```
+
+Open http://localhost:3000/app/ and log in. On a "Ready to ship" order click **Ship now**,
+enter the ADMIN_PASSWORD from `.env`, check the details, and press **Create shipment**.
+
+Fill these in `.env` first:
+
+| Setting | What it is |
+| --- | --- |
+| ADMIN_PASSWORD | Your own password for the server, 8+ characters |
+| SESSION_SECRET | Any random text, 32+ characters |
+| DELHIVERY_API_TOKEN | Your Delhivery token (use a NEW one, never share it in chat) |
+| DELHIVERY_ENV | `staging` to practice, `production` for real |
+| DELHIVERY_PICKUP_LOCATION | Warehouse name exactly as in Delhivery (case sensitive) |
+| DELHIVERY_SELLER_GST_TIN | Your GST number |
+| DELHIVERY_HSN_CODE | HSN code of what you ship |
+| DELHIVERY_DRY_RUN | `true` = nothing is booked (safe). Set `false` to book real shipments |
+
+Safety: with DRY_RUN on, the server builds the shipment but never calls Delhivery's booking API.
+A second request for the same order returns the first shipment, so nothing is booked twice.
+The Delhivery adapter is built from public docs and has not been run against the live API from
+this project yet. Do the first real booking with one test order and check it in the Delhivery portal.
+
+Tested here against a local pretend Delhivery server: login, validation, dry run, live booking,
+no double booking, cancel, static files, path traversal.
