@@ -97,3 +97,9 @@ just a rate card (data). Seller price = courier cost x (1 + margin %), where the
 seller's own override or the courier default. Run the checks with `npm run test:rates`.
 The numbers in the panel are SAMPLE rates until you load each courier's real rate card.
 Admin edits in the panel are in memory only for now; saving them to a database is the next step.
+
+## Easiest way to run it (no coding)
+
+Use `fastship-server.zip` (a ready bundle with the server, the website, and `start.bat` / `start.sh`).
+It only needs Node.js. Follow `READ-ME-FIRST.txt` inside. The server prints "FIX NEEDED" lines
+and the Ship now drawer shows the same list if something in `.env` is missing.

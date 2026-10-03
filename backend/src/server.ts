@@ -70,7 +70,21 @@ type Handler = (req: http.IncomingMessage, url: URL, params: string[]) => Promis
 const routes: { method: string; re: RegExp; auth: boolean; fn: Handler }[] = [];
 const route = (method: string, re: RegExp, auth: boolean, fn: Handler) => routes.push({ method, re, auth, fn });
 
-route('GET', /^\/api\/health$/, false, async () => ({ ok: true, couriers: [...couriers.keys()] }));
+// What still needs fixing in .env before real bookings can work (setting names only, never values).
+function setupIssues(): string[] {
+  const out: string[] = [];
+  if (!couriers.has('delhivery')) out.push('DELHIVERY_API_TOKEN is not set');
+  else if (env.DELHIVERY_DRY_RUN === 'false') {
+    if (!env.DELHIVERY_PICKUP_LOCATION) out.push('DELHIVERY_PICKUP_LOCATION is not set (your warehouse name exactly as in Delhivery)');
+    if (!env.DELHIVERY_SELLER_GST_TIN) out.push('DELHIVERY_SELLER_GST_TIN is not set');
+    if (!env.DELHIVERY_HSN_CODE) out.push('DELHIVERY_HSN_CODE is not set');
+  }
+  return out;
+}
+route('GET', /^\/api\/health$/, false, async () => ({
+  ok: true, couriers: [...couriers.keys()], setup: setupIssues(),
+  dryRun: Object.fromEntries([...couriers].map(([k, c]) => [k, (c as any).isDryRun ?? true])),
+}));
 
 route('POST', /^\/api\/login$/, false, async (req) => {
   throttleLogin(req.socket.remoteAddress ?? 'x');
@@ -196,4 +210,10 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: 'Something went wrong on the server' });
   }
 });
-server.listen(PORT, () => console.log(`FastShip server on :${PORT}. Couriers: ${[...couriers.keys()].join(', ') || 'none configured'}`));
+server.listen(PORT, () => {
+  console.log(`FastShip server on http://localhost:${PORT}  (panel: http://localhost:${PORT}/app/)`);
+  console.log(`Couriers: ${[...couriers.keys()].join(', ') || 'none configured'}`);
+  const d = (couriers.get('delhivery') as any)?.isDryRun;
+  if (d !== undefined) console.log(d ? 'Delhivery is in DRY RUN mode: nothing is booked. Set DELHIVERY_DRY_RUN=false for real bookings.' : 'Delhivery is LIVE: shipments will be booked for real.');
+  for (const i of setupIssues()) console.log('FIX NEEDED: ' + i);
+});

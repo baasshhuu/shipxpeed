@@ -401,8 +401,9 @@ function shipForm(o,msg){const id=o[0],d=o[8]||{},h=SRV.health,m=(o[2].match(/^(
  if(!h)return $('#dr').innerHTML=head+`<div class="card"><b>Shipping server not connected</b><p class="sub" style="font-size:13px">Real shipments are created by the FastShip server, not by this page alone. Open the panel from your server address (for example http://localhost:3000/app/) after starting it. Steps are in the README.</p></div>`;
  if(!h.couriers.length)return $('#dr').innerHTML=head+`<div class="card"><b>No courier configured</b><p class="sub" style="font-size:13px">Add DELHIVERY_API_TOKEN to the server's .env file and restart it.</p></div>`;
  if(!SRV.token)return $('#dr').innerHTML=head+`<p class="sub">Enter the server password (ADMIN_PASSWORD from the .env file) to ship.</p><label>Server password<input id="spw" type="password" autocomplete="off"></label><div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-srvlogin data-oid="${esc(id)}">Connect</button>`;
- const pay=o[3];
- $('#dr').innerHTML=head+`<p class="sub">${esc(o[1])}, ${pay==='COD'?'COD '+inr(o[4]):'Prepaid '+inr(o[4])}</p>
+ const pay=o[3],bad=(h.setup||[]),dry=Object.values(h.dryRun||{}).some(Boolean);
+ const warn=(bad.length?`<div class="card" style="border-color:var(--bad);margin-bottom:12px"><b class="dn">Fix these in the server's .env file, then restart it:</b><ul style="margin:8px 0 0;padding-left:18px;font-size:13px">${bad.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:'')+(dry?'<div class="card" style="margin-bottom:12px"><span class="b warn">DRY RUN</span> <span class="sub" style="font-size:13px">Practice mode: nothing is booked at the courier. Set DELHIVERY_DRY_RUN=false in .env for real shipments.</span></div>':'');
+ $('#dr').innerHTML=head+warn+`<p class="sub">${esc(o[1])}, ${pay==='COD'?'COD '+inr(o[4]):'Prepaid '+inr(o[4])}</p>
  <label>Courier<select id="sc">${h.couriers.map(c=>`<option value="${esc(c)}">${esc(c[0].toUpperCase()+c.slice(1))}</option>`).join('')}</select></label>
  <label style="margin-top:10px">Phone<input id="sph" inputmode="numeric" maxlength="10" value="${esc(d.phone||'')}"></label>
  <label style="margin-top:10px">Address<input id="sad" value="${esc(d.addr||'')}"></label>
@@ -411,7 +412,7 @@ function shipForm(o,msg){const id=o[0],d=o[8]||{},h=SRV.health,m=(o[2].match(/^(
  <label style="margin-top:10px">State<input id="sst" value="${esc(d.state||'')}"></label>
  <label style="margin-top:10px">Product<input id="spr" value="${esc(d.prod||'')}"></label>
  <label style="margin-top:10px">Weight (kg)<input id="swt" type="number" step="0.1" min="0.1" value="${d.kg||0.5}"></label>
- <div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-shipgo="${esc(id)}">Create shipment</button>
+ <div class="err" id="se" role="alert">${esc(msg||'')}</div><button class="btn" data-shipgo="${esc(id)}" ${bad.length?'disabled':''}>Create shipment</button>
  <p class="sub" style="font-size:12px;margin-top:10px">Your server decides if this is a dry run or a real booking (DELHIVERY_DRY_RUN in .env).</p>`}
 async function srvLogin(){const oid=document.querySelector('[data-srvlogin]').dataset.oid,o=orders.find(x=>x[0]===oid);
  try{SRV.token=(await sapi('POST','/api/login',{password:$('#spw').value})).token;shipForm(o)}catch(e){shipForm(o,e.message)}}
