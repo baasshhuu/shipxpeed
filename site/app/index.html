@@ -326,7 +326,7 @@ $('#lp').onkeydown=e=>{if(e.key==='Enter')$('#lgo').click()};
 $('#lgo').onclick=()=>{if(!/^\S+@\S+\.\S+$/.test($('#le').value.trim()))return fail('Enter a valid email address.');if($('#lp').value.length<6)return fail('Password must be at least 6 characters.');
 if(signup){if(!$('#ln').value.trim()||!$('#lb').value.trim()||!/^\d{10}$/.test($('#lm').value.trim()))return fail('Enter your name, business name and a 10-digit mobile number.');
 me.name=$('#lb').value.trim();sellers.push([me.name,'—','Not started',0,0,true,$('#le').value.trim().toLowerCase()]);meIdx=sellers.length-1;loadAccount(true);kt='Business';role='seller';cur='KYC'}
-else{role=lt.toLowerCase();cur=role==='admin'?'Overview':'Dashboard';if(role==='seller')loadAccount(false)}
+else{if(lt==='Admin'&&($('#le').value.trim().toLowerCase()!=='bashu@test.com'||$('#lp').value!=='123456'))return fail('Wrong admin email or password.');role=lt.toLowerCase();cur=role==='admin'?'Overview':'Dashboard';if(role==='seller')loadAccount(false)}
 enter()}}
 function kycp(){const ro=['Under review','Approved'].includes(kyc.status),d=kyc.status==='Approved',dn=Object.keys(docs).length,dis=ro?'disabled':'';
 const f=(l,v='')=>`<label>${l}<input value="${v}" ${dis}></label>`;
