@@ -196,23 +196,36 @@ ${list.length?`<div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Des
 ${list.map(o=>`<tr><td><b>${o[0]}</b></td><td>${esc(o[1])}</td><td>${esc(o[2])}</td><td>${o[3]==='COD'?'<span class="b warn">COD</span>':'<span class="b mut">Prepaid</span>'}</td><td>${inr(o[4])}</td><td>${o[5]}</td><td>${o[6]}</td><td>${badge(o[7])}</td>
 <td>${o[7]==='Ready to ship'?`<button class="btn sm" data-shipnow="${o[0]}">Ship now</button>`:`<button class="btn sm sec" data-track="${o[0]}">Track</button>`}</td></tr>`).join('')}</table></div>`:`<div class="empty">No orders match. Clear the filter or create a new order.</div>`}</div>`}
 // ---------- Universal rate card (sample numbers for design review; real courier cards replace them) ----------
-// Every courier uses the same formula: price = zone first-slab + extra slabs, plus COD fee, RTO charge and GST.
+// Every courier and every client uses the same slab logic:
+//  price = slab base + (number of extra 500 g above the slab weight) x slab "add 500 g" rate, per zone.
+//  COD fee = the higher of a fixed amount or a percent of the COD amount. GST 18% is added on freight + COD fee.
 const ZN_SHORT=['A','B','C','D','E'];
 const ZN_DESC=['Within the same city','Within the same state','Metro to metro','Rest of India','Remote and special areas (North-East, J&K, islands)'];
 const REMOTE=['Jammu & Kashmir','Ladakh','Arunachal Pradesh','Assam','Manipur','Meghalaya','Mizoram','Nagaland','Tripura','Sikkim','Andaman & Nicobar Islands','Lakshadweep'];
+const SLABS=[0.5,1,2,5,10];
+const SLAB_LBL=['500 g (first slab)','1 kg slab','2 kg slab','5 kg slab','10 kg slab'];
+const ADD_LBL=['Add. 500 g (above 500 g, up to 1 kg)','Add. 500 g (above 1 kg, up to 2 kg)','Add. 500 g (above 2 kg, up to 5 kg)','Add. 500 g (above 5 kg, up to 10 kg)','Add. 500 g (above 10 kg)'];
+// Starting slab prices from a "first 500 g" and "extra 500 g" pair, so heavier slabs continue smoothly.
+function genRate(f,e){const fac=[1,.92,.85,.78,.7],r=[];let base=f;for(let i=0;i<5;i++){const add=+(e*fac[i]).toFixed(2);if(i>0){const p=r[i-1];base=p[0]+Math.ceil((SLABS[i]-SLABS[i-1])/0.5)*p[1]}r.push([+base.toFixed(2),add])}return r}
+const mkc=(z,cod,rto,eta)=>({rate:z.map(x=>genRate(x[0],x[1])),cod:{min:cod[0],pct:cod[1]},rto,eta:[...eta]});
 const RC={
- c:{Delhivery:{z:[[38,30],[46,36],[58,44],[70,52],[92,70]],cod:[30,2],rto:90,eta:[3,3,4,5,6]},
-    Xpressbees:{z:[[35,28],[43,34],[55,42],[68,50],[88,66]],cod:[30,2],rto:90,eta:[3,4,4,5,7]},
-    Ekart:{z:[[33,26],[41,32],[52,40],[64,48],[84,62]],cod:[28,1.8],rto:90,eta:[4,4,5,6,7]},
-    'Blue Dart':{z:[[52,40],[60,46],[74,56],[88,66],[110,82]],cod:[35,2.2],rto:100,eta:[2,2,3,4,5]},
-    DTDC:{z:[[36,28],[45,35],[56,43],[69,51],[90,68]],cod:[30,2],rto:90,eta:[3,4,5,5,7]}},
- m:{Delhivery:18,Xpressbees:20,Ekart:22,'Blue Dart':12,DTDC:20}, // default margin % on top of courier cost
- sm:{} // per-seller margin overrides: sm[sellerIndex][courier] = percent
+ c:{Delhivery:mkc([[38,30],[46,36],[58,44],[70,52],[92,70]],[30,2],90,[3,3,4,5,6]),
+    Xpressbees:mkc([[35,28],[43,34],[55,42],[68,50],[88,66]],[30,2],90,[3,4,4,5,7]),
+    Ekart:mkc([[33,26],[41,32],[52,40],[64,48],[84,62]],[28,1.8],90,[4,4,5,6,7]),
+    'Blue Dart':mkc([[52,40],[60,46],[74,56],[88,66],[110,82]],[35,2.2],100,[2,2,3,4,5]),
+    DTDC:mkc([[36,28],[45,35],[56,43],[69,51],[90,68]],[30,2],90,[3,4,5,5,7])},
+ m:{Delhivery:18,Xpressbees:20,Ekart:22,'Blue Dart':12,DTDC:20} // default margin %, used when a client's rates are created or reset
 };
-const marg=(n,si)=>{const o=RC.sm[si];return o&&o[n]!==undefined&&o[n]!==''?+o[n]:RC.m[n]};
-// cw = chargeable weight in kg, slabs of 0.5 kg. cost=true returns the courier cost, otherwise the seller price.
-function quote(n,z,cw,mode,val,si,cost){const c=RC.c[n],[a,b]=c.z[z],sl=Math.max(1,Math.ceil(cw/0.5));let f=a+(sl-1)*b,cd=mode==='COD'?Math.max(c.cod[0],val*c.cod[1]/100):0,rt=f*c.rto/100;
- if(!cost){const m=1+marg(n,si)/100;f*=m;cd*=m;rt*=m}const gst=(f+cd)*.18;return{f,cod:cd,rto:rt,gst,total:f+cd+gst}}
+const COURIERS=()=>Object.keys(RC.c);
+// A client's own rate card per courier: what the client pays, with a live/disabled switch.
+const CRC={};
+function mkClient(n,live){const c=JSON.parse(JSON.stringify(RC.c[n])),m=1+RC.m[n]/100;c.rate=c.rate.map(z=>z.map(p=>[+(p[0]*m).toFixed(2),+(p[1]*m).toFixed(2)]));c.cod.min=+(c.cod.min*m).toFixed(2);c.live=!!live;return c}
+function crd(si){if(!CRC[si]){CRC[si]={};const s=sellers[si];COURIERS().forEach(n=>CRC[si][n]=mkClient(n,si===0||(s&&s[2]==='Approved'&&n==='Delhivery')))}return CRC[si]}
+const liveOf=si=>COURIERS().filter(n=>crd(si)[n].live);
+// cw in kg. Weight is rounded up to the next 500 g.
+function slabPrice(rate,cw){const w=Math.max(0.5,Math.ceil(cw/0.5)*0.5);let i=0;for(let k=0;k<SLABS.length;k++)if(SLABS[k]<w)i=k;const p=rate[i];return w<=SLABS[i]?p[0]:p[0]+Math.ceil((w-SLABS[i])/0.5)*p[1]}
+// cost=true prices with the courier's own cost card, otherwise with the client's card.
+function quote(n,z,cw,mode,val,si,cost){const c=cost?RC.c[n]:crd(si)[n],f=slabPrice(c.rate[z],cw),cd=mode==='COD'?Math.max(c.cod.min,val*c.cod.pct/100):0,rt=f*c.rto/100,gst=(f+cd)*.18;return{f,cod:cd,rto:rt,gst,total:f+cd+gst}}
 const pinCache={};
 // Looks up a pincode on api.postalpincode.in from the browser. Returns {ok:true,city,district,state}
 // or {ok:false,reason:'invalid'|'unreachable'}. If the page cannot reach the API, features fall back.
@@ -246,7 +259,8 @@ out.innerHTML='<div class="card" style="margin-top:12px">Checking pincodes…</d
 $('#rph').innerHTML=pinText(ia);$('#rdh').innerHTML=pinText(ib);
 if(ia.reason==='invalid'||ib.reason==='invalid'){out.innerHTML=`<div class="card" style="margin-top:12px"><span class="b bad">Pincode not found</span> ${ia.reason==='invalid'?p:d} is not a valid Indian pincode.</div>`;return}
 const vol=l*b*h/5000,ch=Math.max(w,vol),z=zoneFrom(p,d,ia,ib),slab=Math.max(1,Math.ceil(ch/0.5));
-const rows=Object.keys(RC.c).map(n=>{const q=quote(n,z,ch,cod?'COD':'Prepaid',v,meIdx);return{n,eta:RC.c[n].eta[z],f:q.f,codf:q.cod,rto:q.rto,gst:q.gst,t:q.total}}).sort((a,b)=>a.t-b.t);
+const lv=liveOf(meIdx);if(!lv.length){out.innerHTML='<div class="card" style="margin-top:12px"><b>No couriers are enabled for your account yet</b><p class="sub" style="margin:6px 0 0">Your account manager turns couriers on for you. Contact support to get started.</p></div>';return}
+const rows=lv.map(n=>{const q=quote(n,z,ch,cod?'COD':'Prepaid',v,meIdx);return{n,eta:crd(meIdx)[n].eta[z],f:q.f,codf:q.cod,rto:q.rto,gst:q.gst,t:q.total}}).sort((a,b)=>a.t-b.t);
 const fast=Math.min(...rows.map(r=>r.eta));
 out.innerHTML=`<div class="stat"><span>Volumetric weight <b>${vol.toFixed(2)} kg</b></span><span>Chargeable <b>${ch.toFixed(2)} kg</b></span><span>Zone <b>${zn[z]}</b></span><span>Route <b>${ia.ok?esc(ia.city):p} to ${ib.ok?esc(ib.city):d}</b></span><span>Rates <span class="b warn">SANDBOX / MOCK</span></span>${ia.ok&&ib.ok?'':'<span class="b mut">Zone estimated: pincode lookup unavailable</span>'}</div>
 <div class="card"><div class="tw"><table><tr><th>Courier</th><th>Delivery ETA</th><th>Freight</th><th>COD fee</th><th>RTO charge</th><th>GST</th><th>Total</th><th></th></tr>
@@ -288,7 +302,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
 let role=null,lt='Seller',signup=false,meIdx=0,kt='Business',cc=0;
 const me={name:'Aarav Textiles'};
 let kyc={status:'Approved',flags:{Business:1,Documents:1,Bank:1}},docs={PAN:1,Aadhaar:1,GST:1,Cheque:1};
-let sellers=[['Aarav Textiles','Pune','Approved',12480,412,true],['Greenleaf Organics','Bengaluru','Under review',0,0,true],['Kumar Electronics','Delhi','Under review',2200,0,true],['Mehta Jewellers','Surat','Changes requested',0,0,true],['Desai Home Decor','Ahmedabad','Approved',8640,286,true],['Nair Spices','Kochi','Approved',15210,533,false]];
+let sellers=[['Aarav Textiles','Pune','Approved',12480,412,true,'aarav@aaravtextiles.in'],['Greenleaf Organics','Bengaluru','Under review',0,0,true,'care@greenleaforganics.in'],['Kumar Electronics','Delhi','Under review',2200,0,true,'sales@kumarelectronics.in'],['Mehta Jewellers','Surat','Changes requested',0,0,true,'hello@mehtajewellers.in'],['Desai Home Decor','Ahmedabad','Approved',8640,286,true,'orders@desaihomedecor.in'],['Nair Spices','Kochi','Approved',15210,533,false,'shop@nairspices.in']];
 const cl=['Delhivery','Xpressbees','Ekart','Blue Dart','DTDC','Shadowfax','Amazon Shipping','Ecom Express','Aramex','DHL'];
 
 const navs={seller:['Dashboard','Orders','Shipments','Rate calculator','Rate card','NDR','RTO','COD','Wallet','KYC','Reports','Integrations','API','Support'],admin:['Overview','Sellers','KYC review','Couriers','Rate cards']};
@@ -311,7 +325,7 @@ const fail=m=>{$('#lerr').textContent=m};
 $('#lp').onkeydown=e=>{if(e.key==='Enter')$('#lgo').click()};
 $('#lgo').onclick=()=>{if(!/^\S+@\S+\.\S+$/.test($('#le').value.trim()))return fail('Enter a valid email address.');if($('#lp').value.length<6)return fail('Password must be at least 6 characters.');
 if(signup){if(!$('#ln').value.trim()||!$('#lb').value.trim()||!/^\d{10}$/.test($('#lm').value.trim()))return fail('Enter your name, business name and a 10-digit mobile number.');
-me.name=$('#lb').value.trim();sellers.push([me.name,'—','Not started',0,0,true]);meIdx=sellers.length-1;loadAccount(true);kt='Business';role='seller';cur='KYC'}
+me.name=$('#lb').value.trim();sellers.push([me.name,'—','Not started',0,0,true,$('#le').value.trim().toLowerCase()]);meIdx=sellers.length-1;loadAccount(true);kt='Business';role='seller';cur='KYC'}
 else{role=lt.toLowerCase();cur=role==='admin'?'Overview':'Dashboard';if(role==='seller')loadAccount(false)}
 enter()}}
 function kycp(){const ro=['Under review','Approved'].includes(kyc.status),d=kyc.status==='Approved',dn=Object.keys(docs).length,dis=ro?'disabled':'';
@@ -334,33 +348,51 @@ return`<h1>Couriers</h1><p class="sub">Connect courier partners. Each one is a s
 <div class="card"><h2>${n}</h2>${on?`<div class="form"><label>Environment<select><option>Production</option><option>Staging</option></select></label><label>Pickup warehouse name<input placeholder="As registered with ${n}"></label><label>API token<input value="Stored on the server" disabled></label><label>Safety mode<select><option>Dry run (read only)</option><option>Live shipments</option></select></label></div>
 <div class="chips" style="margin-top:12px">${['COD','Prepaid','RTO','Reverse pickup','International'].map((x,i)=>`<label style="display:flex;gap:6px;align-items:center;color:var(--text)"><input type="checkbox" ${i<4?'checked':''}> ${x}</label>`).join('')}</div>
 <div class="chips" style="margin-top:14px"><button class="btn" data-toast="Settings saved">Save settings</button><button class="btn sec" data-toast="Demo result only: the real connection test runs on your server">Test connection</button></div><p class="sub" style="font-size:13px;margin:12px 0 0">Secrets never go in this page. They live in the server's .env file and are encrypted at rest.</p>`:`<p class="sub">Not connected yet. Adding ${n} means writing its adapter on the server and adding its credentials there.</p><button class="btn sec" data-toast="${n} adapter queued for the next build">Queue ${n} adapter</button>`}</div>`}
-let rcc='Delhivery',rsi=0;
-const inpS='width:84px;margin:0;padding:6px 8px';
-function rcard(){const names=Object.keys(RC.c),c=RC.c[rcc],sl=n=>(a)=>quote(n,a,0.5,'Prepaid',0,meIdx),ex=(n,z)=>quote(n,z,1,'Prepaid',0,meIdx).f-quote(n,z,0.5,'Prepaid',0,meIdx).f;
-const q1=quote(rcc,2,0.8,'Prepaid',0,meIdx),m1=quote(rcc,2,0.8,'COD',1299,meIdx);
-return`<h1>Rate card</h1><p class="sub">Your shipping prices by zone, for every courier. Prices are before GST. <span class="b warn">SAMPLE RATES</span></p>
-<div class="chips" style="margin-bottom:14px">${names.map(n=>`<button class="chip ${n===rcc?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>
-<div class="card tw"><table><tr><th>Zone</th><th>Covers</th><th>First 500 g</th><th>Each extra 500 g</th><th>Delivery time</th></tr>
-${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b></td><td>${ZN_DESC[i]}</td><td>${inr(quote(rcc,i,0.5,'Prepaid',0,meIdx).f)}</td><td>${inr(ex(rcc,i))}</td><td>${c.eta[i]} days</td></tr>`).join('')}</table></div>
-<div class="grid2" style="margin-top:14px;grid-template-columns:1fr 1fr"><section class="card"><h2>Extra charges</h2><div class="stat" style="flex-direction:column;gap:6px;margin:0"><span>COD fee <b>${inr(quote(rcc,0,0.5,'COD',0,meIdx).cod)} or ${(c.cod[1]*(1+marg(rcc,meIdx)/100)).toFixed(2)}% of order value, whichever is higher</b></span><span>RTO (return) charge <b>${c.rto}% of the forward freight</b></span><span>GST <b>18% on freight and COD fee</b></span></div></section>
-<section class="card"><h2>Worked example</h2><p class="sub" style="margin:0;font-size:14px">0.8 kg parcel, Zone C (metro to metro), ${esc(rcc)}</p><div class="stat" style="flex-direction:column;gap:4px;margin:10px 0 0"><span>Prepaid: freight ${inr(q1.f)} + GST ${inr(q1.gst)} = <b>${inr(q1.total)}</b></span><span>COD, ₹1,299 order: freight ${inr(m1.f)} + COD fee ${inr(m1.cod)} + GST ${inr(m1.gst)} = <b>${inr(m1.total)}</b></span></div></section></div>
-<section class="card" style="margin-top:14px"><h2>All couriers, first 500 g (prepaid)</h2><div class="tw"><table><tr><th>Zone</th>${names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>
-${ZN_SHORT.map((z,i)=>{const v=names.map(n=>quote(n,i,0.5,'Prepaid',0,meIdx).f),lo=Math.min(...v);return`<tr><td><b>Zone ${z}</b></td>${v.map(x=>`<td>${x===lo?'<b class="up">'+inr(x)+'</b>':inr(x)}</td>`).join('')}</tr>`}).join('')}</table></div>
-<p class="sub" style="margin:10px 0 0;font-size:13px">Weight is rounded up to the next 500 g. The larger of actual and volumetric weight is charged (length × breadth × height ÷ 5000).</p></section>`}
-function arc(){const names=Object.keys(RC.c),c=RC.c[rcc],ok=sellers[rsi]||sellers[0];
-const num=(v,k,x)=>`<input type="number" min="0" step="any" style="${inpS}" value="${v}" data-rc="${k}" aria-label="${esc(k)}">`;
-return`<h1>Rate cards</h1><p class="sub">Set what each courier charges you, then the margin you add for sellers. Sellers only see their own price. <span class="b warn">SAMPLE RATES</span></p>
-<section class="card"><h2>1. Courier cost card</h2><div class="chips" style="margin-bottom:12px">${names.map(n=>`<button class="chip ${n===rcc?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>
-<div class="tw"><table><tr><th>Zone</th><th>First 500 g (₹)</th><th>Each extra 500 g (₹)</th><th>Delivery days</th></tr>
-${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b> <span class="muted">${ZN_DESC[i]}</span></td><td>${num(c.z[i][0],'z|'+i+'|0')}</td><td>${num(c.z[i][1],'z|'+i+'|1')}</td><td>${num(c.eta[i],'eta|'+i)}</td></tr>`).join('')}</table></div>
-<div class="form" style="margin-top:14px;grid-template-columns:repeat(4,1fr)"><label>COD minimum fee (₹)${num(c.cod[0],'cod|0')}</label><label>COD fee (% of order value)${num(c.cod[1],'cod|1')}</label><label>RTO charge (% of freight)${num(c.rto,'rto')}</label><label>Default margin (%)${num(RC.m[rcc],'m')}</label></div>
-<p class="sub" style="margin:10px 0 0;font-size:13px">Courier cost is what the courier bills you. Seller price = cost × (1 + margin %). Changes apply to the calculator and every seller's rate card at once.</p></section>
-<section class="card" style="margin-top:14px"><h2>2. Seller margins</h2><label style="max-width:320px">Seller<select id="rsel" data-rsel>${sellers.map((x,i)=>`<option value="${i}" ${i===rsi?'selected':''}>${esc(x[0])}</option>`).join('')}</select></label>
-<div class="tw" style="margin-top:12px"><table><tr><th>Courier</th><th>Default margin</th><th>This seller's margin (%)</th><th>Margin now</th><th>Zone C, first 500 g: cost</th><th>Seller price</th><th>Your profit</th></tr>
-${names.map(n=>{const o=(RC.sm[rsi]||{})[n],cost=quote(n,2,0.5,'Prepaid',0,rsi,true).f,pr=quote(n,2,0.5,'Prepaid',0,rsi).f;return`<tr><td><b>${esc(n)}</b></td><td>${RC.m[n]}%</td><td><input type="number" min="0" max="100" step="any" style="${inpS}" placeholder="${RC.m[n]}" value="${o===undefined?'':o}" data-sm="${esc(n)}" aria-label="${esc(n)} margin for ${esc(ok[0])}"></td><td><b>${marg(n,rsi)}%</b> ${o!==undefined&&o!==''?'<span class="b info">Custom</span>':'<span class="b mut">Default</span>'}</td><td>${inr(cost)}</td><td><b>${inr(pr)}</b></td><td class="up">${inr(pr-cost)}</td></tr>`}).join('')}</table></div>
-<div class="chips" style="margin-top:12px"><button class="btn sec" data-rsreset>Reset ${esc(ok[0])} to default margins</button></div></section>
-<section class="card" style="margin-top:14px"><h2>3. Price preview for ${esc(ok[0])} (first 500 g, prepaid)</h2><div class="tw"><table><tr><th>Zone</th>${names.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>
-${ZN_SHORT.map((z,i)=>`<tr><td><b>Zone ${z}</b></td>${names.map(n=>`<td>${inr(quote(n,i,0.5,'Prepaid',0,rsi).f)}</td>`).join('')}</tr>`).join('')}</table></div></section>`}
+let rcc='Delhivery';
+const inpS='width:78px;margin:0;padding:6px 8px';
+const inr2=n=>'₹'+(+n).toFixed(2);
+// One table for every rate card: rows are slabs (and the extra-500 g rate for each slab), columns are zones.
+function rateTable(c,ed){const f=(v,k)=>ed?`<input type="number" min="0" step="any" style="${inpS}" value="${v}" data-ed="${k}" aria-label="${k}">`:inr2(v);
+ return`<div class="tw"><table><tr><th>Slab</th>${ZN_SHORT.map((z,i)=>`<th title="${esc(ZN_DESC[i])}">Zone ${z}</th>`).join('')}</tr>`+
+ SLABS.map((s,i)=>`<tr><td><b>${SLAB_LBL[i]}</b></td>${ZN_SHORT.map((z,zi)=>`<td>${f(c.rate[zi][i][0],'r|'+zi+'|'+i+'|0')}</td>`).join('')}</tr><tr><td class="muted" style="padding-left:22px">${ADD_LBL[i]}</td>${ZN_SHORT.map((z,zi)=>`<td>${f(c.rate[zi][i][1],'r|'+zi+'|'+i+'|1')}</td>`).join('')}</tr>`).join('')+
+ `<tr><td><b>Delivery days</b></td>${ZN_SHORT.map((z,zi)=>`<td>${ed?`<input type="number" min="1" step="1" style="${inpS}" value="${c.eta[zi]}" data-ed="eta|${zi}" aria-label="Delivery days zone ${z}">`:c.eta[zi]+' days'}</td>`).join('')}</tr></table></div>
+ <p class="sub" style="margin:8px 0 0;font-size:13px">Zones: ${ZN_SHORT.map((z,i)=>`<b>${z}</b> ${esc(ZN_DESC[i])}`).join(' · ')}. Price = slab base + extra 500 g steps × the add. 500 g rate. Weight is rounded up to the next 500 g.</p>`}
+const codTxt=c=>`${inr2(c.cod.min)} per COD shipment or ${c.cod.pct}% of the COD amount, whichever is higher`;
+function rcard(){const live=liveOf(meIdx);
+ if(!live.length)return`<h1>Rate card</h1><p class="sub">Your shipping prices by zone, for every courier.</p><div class="card"><b>No couriers are enabled for your account yet</b><p class="sub" style="margin:6px 0 0">Your account manager turns couriers on for you. Contact support to get started.</p></div>`;
+ const cur=live.includes(rcc)?rcc:live[0],c=crd(meIdx)[cur],q1=quote(cur,2,0.8,'Prepaid',0,meIdx),m1=quote(cur,2,0.8,'COD',1299,meIdx);
+return`<h1>Rate card</h1><p class="sub">Your shipping prices by zone, for every courier enabled on your account. Prices are before GST. <span class="b warn">SAMPLE RATES</span></p>
+<div class="chips" style="margin-bottom:14px">${live.map(n=>`<button class="chip ${n===cur?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>
+<div class="card">${rateTable(c,false)}</div>
+<div class="grid2" style="margin-top:14px;grid-template-columns:1fr 1fr"><section class="card"><h2>Extra charges</h2><div class="stat" style="flex-direction:column;gap:6px;margin:0"><span>COD fee <b>${codTxt(c)}</b></span><span>RTO (return) charge <b>${c.rto}% of the forward freight</b></span><span>GST <b>18% on freight and COD fee</b></span></div></section>
+<section class="card"><h2>Worked example</h2><p class="sub" style="margin:0;font-size:14px">0.8 kg parcel, Zone C (metro to metro), ${esc(cur)}</p><div class="stat" style="flex-direction:column;gap:4px;margin:10px 0 0"><span>Prepaid: freight ${inr2(q1.f)} + GST ${inr2(q1.gst)} = <b>${inr2(q1.total)}</b></span><span>COD, ₹1,299 order: freight ${inr2(m1.f)} + COD fee ${inr2(m1.cod)} + GST ${inr2(m1.gst)} = <b>${inr2(m1.total)}</b></span></div></section></div>
+<section class="card" style="margin-top:14px"><h2>All your couriers, 500 g (prepaid)</h2><div class="tw"><table><tr><th>Zone</th>${live.map(n=>`<th>${esc(n)}</th>`).join('')}</tr>
+${ZN_SHORT.map((z,i)=>{const v=live.map(n=>quote(n,i,0.5,'Prepaid',0,meIdx).f),lo=Math.min(...v);return`<tr><td><b>Zone ${z}</b></td>${v.map(x=>`<td>${x===lo?'<b class="up">'+inr2(x)+'</b>':inr2(x)}</td>`).join('')}</tr>`}).join('')}</table></div></section>`}
+const adm={scope:'client',q:'',si:null,msg:''};
+const edCard=()=>adm.scope==='cost'?RC.c[rcc]:(adm.si!==null?crd(adm.si)[rcc]:null);
+function codBlock(c,cost){return`<div class="form" style="margin-top:14px;grid-template-columns:repeat(${cost?4:3},1fr)"><label>COD fixed fee per COD shipment (₹)<input type="number" min="0" step="any" style="margin-top:4px" value="${c.cod.min}" data-ed="cod|0"></label><label>COD fee (% of COD amount)<input type="number" min="0" max="100" step="any" style="margin-top:4px" value="${c.cod.pct}" data-ed="cod|1"></label><label>RTO charge (% of freight)<input type="number" min="0" step="any" style="margin-top:4px" value="${c.rto}" data-ed="rto"></label>${cost?`<label>Default margin for new client rates (%)<input type="number" min="0" max="100" step="any" style="margin-top:4px" value="${RC.m[rcc]}" data-ed="m"></label>`:''}</div>
+<p class="sub" style="margin:8px 0 0;font-size:13px">On a COD shipment the client is charged <b>whichever is higher</b>: the fixed fee or the percent of the COD amount. Prepaid shipments pay no COD fee.</p>`}
+function arc(){const names=COURIERS(),isC=adm.scope==='client';
+ let h=`<h1>Rate cards</h1><p class="sub">Look up a client by email, choose which couriers are live for them and edit their rates. <span class="b warn">SAMPLE RATES</span></p>
+<div class="tabs"><button data-adscope="client" class="${isC?'on':''}">Client rates</button><button data-adscope="cost" class="${!isC?'on':''}">Courier cost (base)</button></div>`;
+ if(!isC){const c=RC.c[rcc];
+  return h+`<section class="card"><h2>What each courier charges you</h2><div class="chips" style="margin-bottom:12px">${names.map(n=>`<button class="chip ${n===rcc?'on':''}" data-rcc="${esc(n)}">${esc(n)}</button>`).join('')}</div>${rateTable(c,true)}${codBlock(c,true)}<p class="sub" style="margin:10px 0 0;font-size:13px">This is your cost. Client rates start from cost + default margin, then you adjust each client on the Client rates tab.</p></section>`}
+ h+=`<section class="card"><h2>Find a client</h2><div class="row" style="justify-content:flex-start;margin:0"><input id="adq" list="adl" type="email" placeholder="client@email.com" value="${esc(adm.q)}" style="max-width:360px;margin:0" aria-label="Client email id"><datalist id="adl">${sellers.map(s=>`<option value="${esc(s[6]||'')}"></option>`).join('')}</datalist><button class="btn" data-adfind>Show rates</button></div><div class="err" role="alert">${esc(adm.msg)}</div></section>`;
+ if(adm.si===null)return h;
+ const s=sellers[adm.si],cards=crd(adm.si),lv=liveOf(adm.si),c=cards[rcc];
+ h+=`<section class="card" style="margin-top:14px"><div class="row" style="margin-bottom:6px"><div><h2 style="margin:0">${esc(s[0])}</h2><span class="muted">${esc(s[6]||'')} · ${lv.length} of ${names.length} couriers live</span></div>${kb(s[2])}</div>
+<div class="tw"><table><tr><th>Courier</th><th>Status</th><th>500 g, Zone A</th><th></th></tr>${names.map(n=>{const k=cards[n];return`<tr style="${k.live?'':'opacity:.55'}"><td><b>${esc(n)}</b></td><td>${k.live?'<span class="b ok">Live</span>':'<span class="b mut">Disabled</span>'}</td><td>${k.live?inr2(k.rate[0][0][0]):'—'}</td><td><div class="chips"><button class="btn sm ${k.live?'sec':''}" data-clive="${esc(n)}">${k.live?'Disable':'Make live'}</button><button class="btn sm ${n===rcc&&k.live?'':'sec'}" data-rcc="${esc(n)}" ${k.live?'':'disabled'}>Edit rates</button></div></td></tr>`}).join('')}</table></div></section>`;
+ if(!c.live)return h+`<section class="card" style="margin-top:14px"><b>${esc(rcc)} is disabled for this client</b><p class="sub" style="margin:6px 0 0">Make it live to see and edit the rates. Disabled couriers never show up for the client.</p></section>`;
+ return h+`<section class="card" style="margin-top:14px"><div class="row" style="margin-bottom:10px"><h2 style="margin:0">${esc(rcc)} rates for ${esc(s[0])}</h2><button class="btn sm sec" data-adreset>Reset to cost + default margin</button></div>${rateTable(c,true)}${codBlock(c,false)}</section>
+<section class="card" style="margin-top:14px"><h2>Test a price</h2><div class="form" style="grid-template-columns:repeat(5,1fr)"><label>Zone<select id="adz">${ZN_SHORT.map((z,i)=>`<option value="${i}">Zone ${z}</option>`).join('')}</select></label><label>Weight (kg)<input id="adw" type="number" min="0.1" step="0.1" value="0.8"></label><label>Payment<select id="adp"><option>Prepaid</option><option>COD</option></select></label><label>COD amount (₹)<input id="ada" type="number" min="0" value="1299"></label><label>&nbsp;<button class="btn" data-adtest style="width:100%;margin-top:4px">Calculate</button></label></div><div id="adres" class="stat" style="margin-top:12px" role="status"></div></section>`}
+function adFind(){const q=($('#adq').value||'').trim().toLowerCase();adm.q=q;
+ if(!/^\S+@\S+\.\S+$/.test(q)){adm.msg='Enter a full email id, like name@shop.com';adm.si=null;return render()}
+ const i=sellers.findIndex(s=>(s[6]||'').toLowerCase()===q);
+ if(i<0){adm.msg='No client found with this email id. Check the spelling, or the client has not signed up yet.';adm.si=null}else{adm.msg='';adm.si=i}
+ render()}
+function adTest(){const zi=+$('#adz').value,w=+$('#adw').value,mode=$('#adp').value,val=+$('#ada').value||0;if(!(w>0)){$('#adres').textContent='Enter a weight above 0 kg.';return}
+ const q=quote(rcc,zi,w,mode,val,adm.si,false),k=quote(rcc,zi,w,mode,val,0,true),paid=q.f+q.cod,cost=k.f+k.cod,prof=paid-cost;
+ $('#adres').innerHTML=`<span>Client pays: freight <b>${inr2(q.f)}</b>${mode==='COD'?` + COD fee <b>${inr2(q.cod)}</b>`:''} + GST <b>${inr2(q.gst)}</b> = <b>${inr2(q.total)}</b></span><span>Your cost (before GST) <b>${inr2(cost)}</b></span><span>Your margin <b class="${prof>=0?'up':'dn'}">${inr2(prof)}</b></span>`}
 function newOrder(){
  if(kyc.status!=='Approved'){toast('Get your KYC approved before creating shipments');return}
  $('#dr').innerHTML=`<div class="row"><h1 style="font-size:20px;margin:0">Create order</h1><button class="ib" data-close aria-label="Close">✕</button></div>
@@ -436,7 +468,7 @@ async function shipCancel(sid){const oid=document.querySelector('[data-shipcance
  try{await sapi('POST','/api/shipments/'+sid+'/cancel');o[5]='—';o[6]='—';o[7]='Ready to ship';delete o[9];$('#dr').classList.remove('open');toast('Shipment cancelled. Order is ready to ship again.');render()}catch(x){toast(x.message)}}
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2400)}
 function closeNav(){$('#side').classList.remove('open');$('#scrim').classList.remove('show')}
-document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-shipnow],[data-rcc],[data-rsreset],[data-srvlogin],[data-shipgo],[data-shipcancel],[data-toast]');if(!t)return;
+document.addEventListener('click',e=>{const t=e.target.closest('[data-go],[data-range],[data-sf],[data-shf],[data-track],[data-close],[data-act],[data-amt],[data-bulk],[data-lt],[data-lsw],[data-tab],[data-doc],[data-save],[data-submit],[data-kyc],[data-tog],[data-cc],[data-gate],[data-neworder],[data-ordsave],[data-shipnow],[data-rcc],[data-clive],[data-adscope],[data-adfind],[data-adreset],[data-adtest],[data-srvlogin],[data-shipgo],[data-shipcancel],[data-toast]');if(!t)return;
 if(t.dataset.go){cur=t.dataset.go;closeNav();$('#dr').classList.remove('open');window.scrollTo(0,0);render()}
 else if(t.dataset.range){range=t.dataset.range;render()}
 else if(t.dataset.sf){sf=t.dataset.sf;render()}
@@ -451,7 +483,11 @@ else if(t.hasAttribute('data-lsw')){signup=!signup;showLogin()}
 else if(t.dataset.tab){kt=t.dataset.tab;render()}
 else if(t.dataset.doc){docs[t.dataset.doc]=1;toast('Document uploaded');render()}
 else if(t.dataset.rcc){rcc=t.dataset.rcc;render()}
-else if(t.hasAttribute('data-rsreset')){delete RC.sm[rsi];toast('Margins reset to default');render()}
+else if(t.dataset.clive){const k=crd(adm.si)[t.dataset.clive];k.live=!k.live;toast(t.dataset.clive+(k.live?' is now live for ':' disabled for ')+sellers[adm.si][0]);render()}
+else if(t.dataset.adscope){adm.scope=t.dataset.adscope;render()}
+else if(t.hasAttribute('data-adfind'))adFind()
+else if(t.hasAttribute('data-adreset')){const was=crd(adm.si)[rcc].live;crd(adm.si)[rcc]=mkClient(rcc,was);toast(rcc+' reset to cost + default margin');render()}
+else if(t.hasAttribute('data-adtest'))adTest()
 else if(t.dataset.shipnow)shipNow(t.dataset.shipnow)
 else if(t.hasAttribute('data-srvlogin'))srvLogin()
 else if(t.dataset.shipgo)shipGo(t.dataset.shipgo)
@@ -468,12 +504,15 @@ else toast(t.dataset.toast)});
 document.addEventListener('input',e=>{if(e.target.dataset&&e.target.dataset.pin&&/^\d{6}$/.test(e.target.value.trim()))e.target.dispatchEvent(new Event('change',{bubbles:true}))});
 document.addEventListener('change',async e=>{const pn=e.target.dataset&&e.target.dataset.pin;if(pn){const h=document.getElementById(pn),v=e.target.value.trim();if(h){if(!/^\d{6}$/.test(v)){h.innerHTML=v?'<span class="dn">Enter 6 digits</span>':'';}else{h.textContent='Checking…';const i=await pinInfo(v);h.innerHTML=pinText(i);const f=e.target.dataset.fill;if(f&&i.ok)document.getElementById(f).value=i.city+', '+i.state}}}
 const d=e.target.dataset||{};
-if(d.rc){const p=d.rc.split('|'),v=+e.target.value;if(!(v>=0)||e.target.value===''){toast('Enter a number, 0 or more');render();return}const c=RC.c[rcc];
- if(p[0]==='z')c.z[+p[1]][+p[2]]=v;else if(p[0]==='eta')c.eta[+p[1]]=Math.max(1,Math.round(v));else if(p[0]==='cod')c.cod[+p[1]]=v;else if(p[0]==='rto')c.rto=Math.min(300,v);else if(p[0]==='m')RC.m[rcc]=Math.min(100,v);
- toast(rcc+' rate card updated');render()}
-else if(d.sm){const t=e.target.value.trim();RC.sm[rsi]=RC.sm[rsi]||{};if(t===''){delete RC.sm[rsi][d.sm]}else{const v=+t;if(!(v>=0&&v<=100)){toast('Margin must be between 0 and 100');render();return}RC.sm[rsi][d.sm]=v}toast('Margin saved for '+sellers[rsi][0]);render()}
-else if(d.rsel!==undefined){rsi=+e.target.value;render()}});
-addEventListener('keydown',e=>{if(e.key==='Escape')$('#dr').classList.remove('open')});
+if(d.ed!==undefined){const c=edCard();if(!c)return;const v=+e.target.value;if(e.target.value===''||!(v>=0)){toast('Enter a number, 0 or more');render();return}
+ const p=d.ed.split('|');
+ if(p[0]==='r')c.rate[+p[1]][+p[2]][+p[3]]=v;
+ else if(p[0]==='eta')c.eta[+p[1]]=Math.max(1,Math.round(v));
+ else if(p[0]==='cod'){if(p[1]==='1'&&v>100){toast('COD percent must be 0 to 100');render();return}c.cod[p[1]==='0'?'min':'pct']=v}
+ else if(p[0]==='rto')c.rto=Math.min(300,v);
+ else if(p[0]==='m'){if(v>100){toast('Margin must be 0 to 100');render();return}RC.m[rcc]=v}
+ toast('Rate updated');render()}});
+addEventListener('keydown',e=>{if(e.key==='Escape')$('#dr').classList.remove('open');if(e.key==='Enter'&&e.target&&e.target.id==='adq')adFind()});
 $('#out').onclick=()=>{$('#dr').classList.remove('open');role=null;signup=false;showLogin()};
 $('#menu').onclick=()=>{$('#side').classList.add('open');$('#scrim').classList.add('show')};
 $('#scrim').onclick=closeNav;
