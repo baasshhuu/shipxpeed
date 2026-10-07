@@ -39,4 +39,6 @@
     <link href="{{ asset('assets/plugins/datatables/dt-global_style.min.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('assets/css/custom.css') }}" rel="stylesheet" id="user-style-default" />
     @yield('css')
+    <!-- FastShip soft-dark theme (loaded last so it overrides the template) -->
+    <link href="{{ asset('assets/css/fastship-theme.css') }}" rel="stylesheet" type="text/css" />
 </head>
