@@ -65,14 +65,15 @@ npm run build
 npm start
 ```
 
-Open http://localhost:3000/app/ and log in. On a "Ready to ship" order click **Ship now**,
-enter the ADMIN_PASSWORD from `.env`, check the details, and press **Create shipment**.
+Open http://localhost:3000/app/ and log in as admin with ADMIN_EMAIL and ADMIN_PASSWORD from `.env`.
+Sellers sign up themselves. On a "Ready to ship" order click **Ship now**, check the details, and press **Create shipment**.
 
 Fill these in `.env` first:
 
 | Setting | What it is |
 | --- | --- |
-| ADMIN_PASSWORD | Your own password for the server, 8+ characters |
+| ADMIN_EMAIL | Your admin login email |
+| ADMIN_PASSWORD | Your admin password, 8+ characters |
 | SESSION_SECRET | Any random text, 32+ characters |
 | DELHIVERY_API_TOKEN | Your Delhivery token (use a NEW one, never share it in chat) |
 | DELHIVERY_ENV | `staging` to practice, `production` for real |
@@ -89,14 +90,24 @@ this project yet. Do the first real booking with one test order and check it in 
 Tested here against a local pretend Delhivery server: login, validation, dry run, live booking,
 no double booking, cancel, static files, path traversal.
 
-## Rate cards
+## Accounts, rates and saved data
 
-All couriers are priced by one formula in `src/rates/ratecard.ts` (zone A to E, 500 g slabs,
-COD fee = larger of a minimum or a percent, RTO as a percent of freight, 18% GST). A courier is
-just a rate card (data). Seller price = courier cost x (1 + margin %), where the margin is the
-seller's own override or the courier default. Run the checks with `npm run test:rates`.
-The numbers in the panel are SAMPLE rates until you load each courier's real rate card.
-Admin edits in the panel are in memory only for now; saving them to a database is the next step.
+The panel now has real accounts when it is opened from this server (any other way it is a demo).
+- Sellers sign up with an email and a password (8+ characters, stored hashed with scrypt).
+- The admin account comes from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`. Change them there and restart.
+- Everything is saved in `DATA_DIR/db.json`: accounts, KYC status, orders, wallet, and each client's rate card.
+- Only the admin can approve KYC, switch a courier live for a client, edit rates and credit a wallet.
+  A seller can never approve themselves or add money to their own wallet.
+- Admin changes reach the client's panel within about 15 seconds. No review step.
+- A seller can ship only when KYC is approved and the courier is live for them.
+- Rates: slab prices per zone A to E, COD fee = larger of a fixed amount or a percent, RTO percent, 18% GST (locked).
+The numbers are SAMPLE rates until the admin enters real ones.
+
+Run the checks with `npm run test:accounts` (starts the server on a temp folder and tests roles, KYC, rates,
+wallet rules, restart persistence and login throttling).
+
+Not built yet: online payments (the admin credits wallets by hand), automatic wallet debit per shipment,
+tracking sync, NDR/RTO actions to couriers, labels and manifests, email notices, password reset, a real database.
 
 ## Easiest way to run it (no coding)
 

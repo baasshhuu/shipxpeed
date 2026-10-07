@@ -6,6 +6,7 @@ import path from 'node:path';
 
 export interface ShipmentRecord {
   id: string;
+  ownerId?: string;
   orderId: string;
   courier: string;
   awb: string;

@@ -217,10 +217,11 @@ const RC={
  m:{Delhivery:18,Xpressbees:20,Ekart:22,'Blue Dart':12,DTDC:20} // default margin %, used when a client's rates are created or reset
 };
 const COURIERS=()=>Object.keys(RC.c);
+let ONLINE=false; // true when this page is served by the FastShip server: real accounts, data saved on the server
 // A client's own rate card per courier: what the client pays, with a live/disabled switch.
 const CRC={};
 function mkClient(n,live){const c=JSON.parse(JSON.stringify(RC.c[n])),m=1+RC.m[n]/100;c.rate=c.rate.map(z=>z.map(p=>[+(p[0]*m).toFixed(2),+(p[1]*m).toFixed(2)]));c.cod.min=+(c.cod.min*m).toFixed(2);c.live=!!live;return c}
-function crd(si){if(!CRC[si]){CRC[si]={};const s=sellers[si];COURIERS().forEach(n=>CRC[si][n]=mkClient(n,si===0||(s&&s[2]==='Approved'&&n==='Delhivery')))}return CRC[si]}
+function crd(si){if(!CRC[si])CRC[si]={};const s=sellers[si];COURIERS().forEach(n=>{if(!CRC[si][n])CRC[si][n]=mkClient(n,!ONLINE&&(si===0||(s&&s[2]==='Approved'&&n==='Delhivery')))});return CRC[si]}
 const liveOf=si=>COURIERS().filter(n=>crd(si)[n].live);
 // cw in kg. Weight is rounded up to the next 500 g.
 function slabPrice(rate,cw){const w=Math.max(0.5,Math.ceil(cw/0.5)*0.5);let i=0;for(let k=0;k<SLABS.length;k++)if(SLABS[k]<w)i=k;const p=rate[i];return w<=SLABS[i]?p[0]:p[0]+Math.ceil((w-SLABS[i])/0.5)*p[1]}
@@ -257,7 +258,7 @@ async function calc(){const p=$('#rp').value,d=$('#rd').value,w=+$('#rw').value,
 const out=$('#rout');if(!/^\d{6}$/.test(p)||!/^\d{6}$/.test(d)){out.innerHTML='<div class="card" style="margin-top:12px"><span class="b bad">Check pincodes</span> Enter 6-digit pickup and delivery pincodes.</div>';return}
 if(!(w>0)){out.innerHTML='<div class="card" style="margin-top:12px"><span class="b bad">Check weight</span> Enter a weight above 0 kg.</div>';return}
 out.innerHTML='<div class="card" style="margin-top:12px">Checking pincodes…</div>';const [ia,ib]=await Promise.all([pinInfo(p),pinInfo(d)]);
-$('#rph').innerHTML=pinText(ia);$('#rdh').innerHTML=pinText(ib);
+if(!$('#rph')||!$('#rout'))return;$('#rph').innerHTML=pinText(ia);$('#rdh').innerHTML=pinText(ib);
 if(ia.reason==='invalid'||ib.reason==='invalid'){out.innerHTML=`<div class="card" style="margin-top:12px"><span class="b bad">Pincode not found</span> ${ia.reason==='invalid'?p:d} is not a valid Indian pincode.</div>`;return}
 const vol=l*b*h/5000,ch=Math.max(w,vol),z=zoneFrom(p,d,ia,ib),slab=Math.max(1,Math.ceil(ch/0.5));
 const lv=liveOf(meIdx);if(!lv.length){out.innerHTML='<div class="card" style="margin-top:12px"><b>No couriers are enabled for your account yet</b><p class="sub" style="margin:6px 0 0">Your account manager turns couriers on for you. Contact support to get started.</p></div>';return}
@@ -284,7 +285,7 @@ function ndrp(){return`<h1>NDR</h1><p class="sub">Failed deliveries waiting for 
 <div class="card">${ndr.length?`<div class="tw"><table><tr><th>Order</th><th>Customer</th><th>Reason</th><th>Attempts</th><th>Courier</th><th>Reported</th><th>Action</th></tr>
 ${ndr.map(n=>`<tr><td><b>${n[0]}</b></td><td>${n[1]}</td><td><span class="b warn">${n[2]}</span></td><td>${n[3]>=3?'<span class="b bad">3 of 3, RTO next</span>':n[3]+' of 3'}</td><td>${n[4]}</td><td>${n[5]}</td>
 <td><div class="chips"><button class="btn sm" data-act="reattempt" data-id="${n[0]}">Reattempt</button><button class="btn sm sec" data-act="address" data-id="${n[0]}">Change address</button><button class="btn sm sec" data-toast="WhatsApp message sent to ${n[1]}">WhatsApp</button><button class="btn sm sec" data-act="cancel" data-id="${n[0]}">Cancel</button><button class="btn sm sec" data-act="rto" data-id="${n[0]}">RTO</button></div></td></tr>`).join('')}</table></div>`:'<div class="empty">All clear. No deliveries need action.</div>'}</div>`}
-function wallet(){let r=0;const rows=ledger.map(e=>{r+=e[3]-e[2];return[...e,r]}).reverse();
+function wallet(){let r=0;const rows=ledger.map(e=>{r+=e[3]-e[2];return[e[0],e[1],e[2],e[3],r]}).reverse();
 return`<div class="row"><div><h1>Wallet</h1><p class="sub" style="margin:0">Every rupee in and out is recorded in the ledger.</p></div><button class="btn sec" data-toast="Statement downloaded: wallet-statement.csv">Download statement</button></div>
 <div class="grid2" style="grid-template-columns:1fr 1.4fr"><section class="card"><div class="sub" style="margin:0">Available balance</div><div style="font-size:34px;font-weight:700;margin:2px 0 10px">${inr(bal())}</div>${bal()<15000?'<span class="b warn">Covers about '+Math.floor(bal()/79)+' shipments at your average rate</span>':'<span class="b ok">Healthy balance</span>'}</section>
 <section class="card"><h2>Add money</h2><div class="chips">${[1000,5000,10000,25000].map(a=>`<button class="chip" data-amt="${a}">+ ${inr(a)}</button>`).join('')}</div><p class="sub" style="margin:12px 0 0;font-size:13px">Pay by UPI, card or net banking. Your balance updates only after the payment is verified.</p></section></div>
@@ -321,13 +322,14 @@ ${signup?`<label>Full name<input id="ln" autocomplete="name"></label><label styl
 <label style="margin-top:10px">Password<input id="lp" type="password" autocomplete="${signup?'new-password':'current-password'}"></label>
 <div class="err" id="lerr" role="alert"></div><button class="btn" id="lgo">${signup?'Create account':'Log in'}</button>
 <p class="sub" style="margin:14px 0 0;font-size:14px">${signup?'Have an account? <button class="link" data-lsw>Log in</button>':lt==='Seller'?'New here? <button class="link" data-lsw>Create a seller account</button>':'Admin access is by invitation only.'}</p>
-<p class="sub" style="font-size:12px;margin:8px 0 0">Prototype: any email and a password of 6+ characters works. Nothing is sent or stored.</p></section>`;
+${ONLINE?'':'<p class="sub" style="font-size:12px;margin:8px 0 0">Demo mode: nothing is saved. Admin demo login is bashu@test.com. Open the panel from your FastShip server for real accounts.</p>'}</section>`;
 const fail=m=>{$('#lerr').textContent=m};
 $('#lp').onkeydown=e=>{if(e.key==='Enter')$('#lgo').click()};
-$('#lgo').onclick=()=>{if(!/^\S+@\S+\.\S+$/.test($('#le').value.trim()))return fail('Enter a valid email address.');if($('#lp').value.length<6)return fail('Password must be at least 6 characters.');
+$('#lgo').onclick=()=>{if(!/^\S+@\S+\.\S+$/.test($('#le').value.trim()))return fail('Enter a valid email address.');if($('#lp').value.length<(ONLINE?8:6))return fail('Password must be at least '+(ONLINE?8:6)+' characters.');
 if(signup){if(!$('#ln').value.trim()||!$('#lb').value.trim()||!/^\d{10}$/.test($('#lm').value.trim()))return fail('Enter your name, business name and a 10-digit mobile number.');
+if(ONLINE)return onlineAuth();
 me.name=$('#lb').value.trim();sellers.push([me.name,'—','Not started',0,0,true,$('#le').value.trim().toLowerCase()]);meIdx=sellers.length-1;loadAccount(true);kt='Business';role='seller';cur='KYC'}
-else{if(lt==='Admin'&&($('#le').value.trim().toLowerCase()!=='bashu@test.com'||$('#lp').value!=='123456'))return fail('Wrong admin email or password.');role=lt.toLowerCase();cur=role==='admin'?'Overview':'Dashboard';if(role==='seller')loadAccount(false)}
+else{if(ONLINE)return onlineAuth();if(lt==='Admin'&&($('#le').value.trim().toLowerCase()!=='bashu@test.com'||$('#lp').value!=='123456'))return fail('Wrong admin email or password.');role=lt.toLowerCase();cur=role==='admin'?'Overview':'Dashboard';if(role==='seller')loadAccount(false)}
 enter()}}
 function kycp(){const ro=['Under review','Approved'].includes(kyc.status),d=kyc.status==='Approved',dn=Object.keys(docs).length,dis=ro?'disabled':'';
 const f=(l,v='')=>`<label>${l}<input value="${v}" ${dis}></label>`;
@@ -338,8 +340,9 @@ if(kt==='Documents')b=`<div class="tw"><table>${dl.map(x=>`<tr><td><b>${x[1]}</b
 if(kt==='Bank')b=`<div class="form">${f('Account holder name',d?me.name:'')}${f('Account number',d?'XXXXXX4821':'')}${f('IFSC',d?'HDFC0001234':'')}${f('Bank name',d?'HDFC Bank':'')}</div><div style="margin-top:14px"><button class="btn" data-save="Bank" ${dis}>Save bank details</button></div>`;
 if(kt==='Review')b=`<div class="stat" style="flex-direction:column;gap:6px">${['Business','Documents','Bank'].map(x=>`<span>${kyc.flags[x]?'✓':'○'} ${x} <b>${kyc.flags[x]?'complete':'pending'}</b></span>`).join('')}</div><p class="sub">${{'Not started':'Finish the three steps, then submit for review.','Under review':'Our team is reviewing your documents, usually within one business day.',Approved:'You are verified and can create shipments.',Rejected:'Your KYC was rejected. Contact support.','Changes requested':'We need changes to your documents. Update them and submit again.'}[kyc.status]}</p><button class="btn" data-submit ${ro||done<3?'disabled':''}>Submit for review</button>`;
 return`<div class="row"><div><h1>KYC</h1><p class="sub" style="margin:0">Verification is needed before you can create shipments.</p></div>${kb(kyc.status)}</div><div class="card"><div class="tabs">${['Business','Documents','Bank','Review'].map(t=>`<button data-tab="${t}" class="${t===kt?'on':''}">${t}</button>`).join('')}</div>${b}</div>`}
-function aov(){const rows=cl.slice(0,5).map((c,i)=>i?[c,'—','—','—','<span class="b mut">Not connected</span>']:[c,'812','94%','5.1%','<span class="b ok">Connected</span>']);
-return`<h1>Overview</h1><p class="sub">Platform health today</p><div class="kpis">${[['Active sellers',sellers.filter(s=>s[5]).length],['Shipments today','1,284'],['Revenue today','₹1,02,430'],['Gross margin','₹17,610'],['COD outstanding','₹9,48,200'],['Failed shipments','19'],['KYC waiting',sellers.filter(s=>s[2]==='Under review').length],['Wallet float','₹4,36,900']].map(k=>`<div class="card kpi"><span>${k[0]}</span><b>${k[1]}</b></div>`).join('')}</div>
+function aov(){const rows=cl.slice(0,5).map((c,i)=>i?[c,'—','—','—','<span class="b mut">Not connected</span>']:ONLINE?[c,'—','—','—','<span class="b warn">Integration Pending</span>']:[c,'812','94%','5.1%','<span class="b ok">Connected</span>']);
+const T=ONLINE?'—':null,fl=sellers.reduce((a,x)=>a+x[3],0),oc=sellers.reduce((a,x)=>a+x[4],0);
+return`<h1>Overview</h1><p class="sub">Platform health today${ONLINE?' <span class="b info">LIVE DATA</span> Revenue, margin and COD appear once courier tracking and payments are connected.':''}</p><div class="kpis">${[['Active sellers',sellers.filter(s=>s[5]).length],[ONLINE?'Orders created':'Shipments today',ONLINE?oc:'1,284'],['Revenue today',T||'₹1,02,430'],['Gross margin',T||'₹17,610'],['COD outstanding',T||'₹9,48,200'],['Failed shipments',T||'19'],['KYC waiting',sellers.filter(s=>s[2]==='Under review').length],['Wallet float',ONLINE?inr(fl):'₹4,36,900']].map(k=>`<div class="card kpi"><span>${k[0]}</span><b>${k[1]}</b></div>`).join('')}</div>
 <section class="card"><h2>Courier performance</h2><div class="tw"><table><tr><th>Courier</th><th>Shipments</th><th>Delivered</th><th>RTO</th><th>Status</th></tr>${rows.map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')}</table></div></section>`}
 function asel(){return`<h1>Sellers</h1><p class="sub">${sellers.length} registered sellers</p><div class="card tw"><table><tr><th>Business</th><th>City</th><th>KYC</th><th>Wallet</th><th>Shipments (30d)</th><th>Account</th><th></th></tr>${sellers.map((s,i)=>`<tr><td><b>${esc(s[0])}</b></td><td>${esc(s[1])}</td><td>${kb(s[2])}</td><td>${inr(s[3])}</td><td>${s[4]}</td><td>${s[5]?'<span class="b ok">Active</span>':'<span class="b bad">Suspended</span>'}</td><td><button class="btn sm sec" data-tog="${i}">${s[5]?'Suspend':'Activate'}</button></td></tr>`).join('')}</table></div>`}
 function akyc(){const q=sellers.map((s,i)=>[s,i]).filter(x=>x[0][2]==='Under review');
@@ -424,7 +427,7 @@ const oq=$('#oq');if(oq)oq.oninput=e=>{q=e.target.value.toLowerCase();const pos=
 const SRV={token:null,health:null};
 async function sapi(m,u,b){const r=await fetch(u,{method:m,headers:{'Content-Type':'application/json',...(SRV.token?{Authorization:'Bearer '+SRV.token}:{})},body:b?JSON.stringify(b):undefined});
  let d=null;try{d=await r.json()}catch{}
- if(!r.ok){if(r.status===401)SRV.token=null;const e=new Error((d&&d.error)||'Server error '+r.status);e.status=r.status;throw e}return d}
+ if(!r.ok){if(r.status===401){SRV.token=null;if(ONLINE&&role){role=null;saveTok();setTimeout(()=>{showLogin();toast('Please log in again')},0)}}const e=new Error((d&&d.error)||'Server error '+r.status);e.status=r.status;throw e}return d}
 async function shipNow(id){const o=orders.find(x=>x[0]===id);if(!o)return;
  $('#dr').innerHTML=`<div class="row"><h1 style="font-size:20px;margin:0">Ship ${esc(id)}</h1><button class="ib" data-close aria-label="Close">✕</button></div><p class="sub">Checking the shipping server...</p>`;$('#dr').classList.add('open');
  try{SRV.health=await sapi('GET','/api/health')}catch{SRV.health=null}
@@ -477,6 +480,7 @@ else if(t.dataset.shf){shf=t.dataset.shf;render()}
 else if(t.dataset.track)track(t.dataset.track)
 else if(t.dataset.close!==undefined)$('#dr').classList.remove('open')
 else if(t.dataset.act){const id=t.dataset.id;ndr=ndr.filter(n=>n[0]!==id);toast({reattempt:'Reattempt booked for ',address:'Address updated and reattempt booked for ',cancel:'Order cancelled: ',rto:'Return started for '}[t.dataset.act]+id);render()}
+else if(t.dataset.amt&&ONLINE)toast('Wallet top-up is by bank transfer for now. Pay FastShip and the admin will credit your wallet.');
 else if(t.dataset.amt){const a=+t.dataset.amt;ledger.push(['Recharge','PAY-'+(2300+ledger.length),0,a]);toast('Payment verified. '+inr(a)+' added to your wallet.');render()}
 else if(t.dataset.bulk){const n=document.querySelectorAll('.ck:checked').length;toast(n?(t.dataset.bulk==='labels'?'Preparing labels for ':'Manifest created for ')+n+' shipment'+(n>1?'s':''):'Select at least one shipment first')}
 else if(t.dataset.lt){lt=t.dataset.lt;showLogin()}
@@ -496,7 +500,7 @@ else if(t.dataset.shipcancel)shipCancel(t.dataset.shipcancel)
 else if(t.hasAttribute('data-neworder'))newOrder()
 else if(t.hasAttribute('data-ordsave'))saveOrder()
 else if(t.dataset.save){kyc.flags[t.dataset.save]=1;toast(t.dataset.save+' details saved');render()}
-else if(t.hasAttribute('data-submit')){kyc.status='Under review';sellers[meIdx][2]='Under review';toast('KYC submitted for review');render()}
+else if(t.hasAttribute('data-submit')){KSUB=true;kyc.status='Under review';sellers[meIdx][2]='Under review';toast('KYC submitted for review');render()}
 else if(t.dataset.kyc){const i=+t.dataset.i,s={approve:'Approved',reject:'Rejected',changes:'Changes requested'}[t.dataset.kyc];sellers[i][2]=s;if(i===meIdx)kyc.status=s;toast(sellers[i][0]+': '+s);render()}
 else if(t.dataset.tog){const r=sellers[+t.dataset.tog];r[5]=!r[5];toast(r[0]+(r[5]?' activated':' suspended'));render()}
 else if(t.dataset.cc){cc=+t.dataset.cc;render()}
@@ -514,11 +518,55 @@ if(d.ed!==undefined){const c=edCard();if(!c)return;const v=+e.target.value;if(e.
  else if(p[0]==='m'){if(v>100){toast('Margin must be 0 to 100');render();return}RC.m[rcc]=v}
  toast(adm&&adm.scope==='client'&&role==='admin'?'Saved. Live for this client now':'Rate updated');render()}});
 addEventListener('keydown',e=>{if(e.key==='Escape')$('#dr').classList.remove('open');if(e.key==='Enter'&&e.target&&e.target.id==='adq')adFind()});
-$('#out').onclick=()=>{$('#dr').classList.remove('open');role=null;signup=false;showLogin()};
+$('#out').onclick=()=>{$('#dr').classList.remove('open');role=null;signup=false;SRV.token=null;LAST=null;saveTok();showLogin()};
 $('#menu').onclick=()=>{$('#side').classList.add('open');$('#scrim').classList.add('show')};
 $('#scrim').onclick=closeNav;
 $('#theme').onclick=()=>{const r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches;r.dataset.theme=dark?'light':'dark'};
-showLogin();
+// ---------- Live mode: real accounts and saved data (only when served by the FastShip server) ----------
+let LAST=null,PT=null,KSUB=false,lastCards='{}';
+const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
+function saveTok(){try{SRV.token?sessionStorage.setItem('fs_tok',SRV.token):sessionStorage.removeItem('fs_tok')}catch{}}
+function applySeller(s){orders=s.orders;ndr=s.ndr;ledger=s.ledger;kyc={status:s.kyc.status,flags:s.kyc.flags||{}};docs=s.docs||{};me.name=s.user.name;
+ sellers=[[s.user.name,'—',kyc.status,bal(),orders.length,true,s.user.email,s.user.id]];meIdx=0;for(const k in CRC)delete CRC[k];CRC[0]=s.cards||{};lastCards=JSON.stringify(s.cards||{});LAST=JSON.stringify(snap())}
+function applyAdmin(a){sellers=a.sellers.map(x=>[x.name,x.city||'—',x.kycStatus,x.balance,x.orders,x.active,x.email,x.id]);for(const k in CRC)delete CRC[k];
+ a.sellers.forEach((x,i)=>{if(a.cards&&a.cards[x.id])CRC[i]=a.cards[x.id]});if(a.cost){Object.assign(RC.c,a.cost.c);Object.assign(RC.m,a.cost.m)}LAST=JSON.parse(JSON.stringify(snap()))}
+function snap(){if(role==='seller'){ledger.forEach(e=>{if(!e[4])e[4]=uid()});return{orders,ndr,docs,kyc:{flags:kyc.flags},ledger}}
+ const k={},a={},c={};sellers.forEach((r,i)=>{k[r[7]]=r[2];a[r[7]]=!!r[5];if(CRC[i])c[r[7]]=CRC[i]});return{k,a,c,cost:{c:RC.c,m:RC.m}}}
+async function hydrate(){const p=SRV.token.split('.')[0].replace(/-/g,'+').replace(/_/g,'/');role=JSON.parse(atob(p)).role;
+ if(role==='seller'){applySeller(await sapi('GET','/api/state'));cur=(kyc.status==='Not started'&&!orders.length)?'KYC':'Dashboard'}
+ else{applyAdmin(await sapi('GET','/api/admin/state'));cur='Overview'}}
+async function onlineAuth(){const btn=$('#lgo'),fail=m=>{$('#lerr').textContent=m},v=i=>$(i).value.trim();btn.disabled=true;fail('');
+ try{const email=v('#le'),password=$('#lp').value;
+  const r=await sapi('POST',signup?'/api/auth/signup':'/api/auth/login',signup?{email,password,name:v('#ln'),business:v('#lb'),mobile:v('#lm')}:{email,password,role:lt.toLowerCase()});
+  SRV.token=r.token;saveTok();signup=false;await hydrate();enter()}catch(e){fail(e.message);btn.disabled=false}}
+function persistSoon(){if(ONLINE&&SRV.token&&role&&LAST){clearTimeout(PT);PT=setTimeout(persist,500)}}
+async function persist(){if(!ONLINE||!SRV.token||!role||!LAST)return;const n=snap();
+ try{if(role==='seller'){const j=JSON.stringify(n);if(j===LAST&&!KSUB)return;const sub=KSUB;await sapi('PUT','/api/state',{...n,kyc:{status:kyc.status,flags:kyc.flags},kycSubmit:sub});LAST=j;if(sub)KSUB=false}
+  else{const o=LAST,d={kyc:{},active:{},cards:{}};let any=false;
+   for(const id in n.k)if(id in o.k&&o.k[id]!==n.k[id]){d.kyc[id]=n.k[id];any=true}
+   for(const id in n.a)if(id in o.a&&o.a[id]!==n.a[id]){d.active[id]=n.a[id];any=true}
+   for(const id in n.c)if(JSON.stringify(o.c[id])!==JSON.stringify(n.c[id])){d.cards[id]=n.c[id];any=true}
+   if(JSON.stringify(o.cost)!==JSON.stringify(n.cost)){d.cost=n.cost;any=true}
+   if(!any)return;await sapi('PUT','/api/admin/state',d);LAST=JSON.parse(JSON.stringify(n))}}
+ catch(e){if(e.status!==401)toast('Could not save: '+e.message)}}
+const typing=()=>{const a=document.activeElement;return a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)||$('#dr').classList.contains('open')};
+// Pick up changes made by the other side (admin approves KYC or switches a courier live; a new seller signs up).
+async function poll(){if(!ONLINE||!SRV.token||!role||document.hidden)return;
+ try{if(role==='seller'){const s=await sapi('GET','/api/state'),c=JSON.stringify(s.cards||{}),ids=new Set(s.ledger.map(e=>e[4])),grew=s.ledger.length!==ledger.filter(e=>ids.has(e[4])).length;
+   if(s.kyc.status!==kyc.status||c!==lastCards||grew){kyc.status=s.kyc.status;sellers[0][2]=kyc.status;if(c!==lastCards){CRC[0]=s.cards||{};lastCards=c}
+    if(grew)ledger=s.ledger.concat(ledger.filter(e=>!ids.has(e[4])));
+    if(!typing())render();else toast('Your account was updated by FastShip')}}
+  else{const a=await sapi('GET','/api/admin/state'),have=new Set(sellers.map(r=>r[7]));let add=0;
+   a.sellers.forEach(x=>{if(!have.has(x.id)){sellers.push([x.name,x.city||'—',x.kycStatus,x.balance,x.orders,x.active,x.email,x.id]);LAST.k[x.id]=x.kycStatus;LAST.a[x.id]=x.active;add++}
+    else{const r=sellers.find(q=>q[7]===x.id);r[3]=x.balance;r[4]=x.orders;if(r[2]===LAST.k[x.id]&&r[2]!==x.kycStatus){r[2]=x.kycStatus;LAST.k[x.id]=x.kycStatus;add++}}});
+   if(add&&!typing())render()}}catch{}}
+setInterval(poll,15000);
+{const _r=render;render=function(){_r();persistSoon()}}
+(async()=>{let h=null;try{const c=new AbortController();setTimeout(()=>c.abort(),2500);const r=await fetch('/api/health',{signal:c.signal});if(r.ok)h=await r.json()}catch{}
+ ONLINE=!!(h&&h.ok&&h.accounts);
+ if(ONLINE){let t=null;try{t=sessionStorage.getItem('fs_tok')}catch{}
+  if(t){SRV.token=t;try{await hydrate();enter();return}catch{SRV.token=null;role=null;saveTok()}}}
+ showLogin()})();
 </script>
 </body>
 </html>
