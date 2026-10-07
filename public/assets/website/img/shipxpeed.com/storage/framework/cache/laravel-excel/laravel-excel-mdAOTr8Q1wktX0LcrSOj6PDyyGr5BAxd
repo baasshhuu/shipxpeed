@@ -1,0 +1,2 @@
+"Order Number","Payment Type","Collectable Amount","Product Name",SKU,Qty,Price,"Consignee Name",Phone,Address,"Address 2",Pincode,City,State,"Pickup Warehouse Name","Pickup Name","Pickup Address","Pickup Address 2","Pickup Pincode","Pickup City","Pickup State","Pickup Phone",Weight,Length,Breadth,Height
+#8581,cod,100,"product 1",1,1,1,"Customer Name",7357169546,"jaipur raj.","Near Bus Stand",110092,"East delhi",Delhi,delhi,vicky,delhi,delhi,110092,"East delhi",Delhi,7357169546,100,10,10,10

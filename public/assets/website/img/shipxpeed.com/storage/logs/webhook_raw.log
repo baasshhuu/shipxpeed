@@ -1,0 +1,16 @@
+{
+    "order_id": "40574188",
+    "order_number": "2396139165",
+    "awb_number": "14355950029744",
+    "status_code": "RT-IT",
+    "status": "rto in transit",
+    "event_time": "2025-05-28 12:22:34",
+    "location": "",
+    "message": "",
+    "rto_awb": "",
+    "pickup_time": 1748415154,
+    "pdd": "2025-05-21 14:37:00",
+    "exception_count": {
+        "exception_count": "1"  
+  }
+}
