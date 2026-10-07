@@ -41,6 +41,8 @@
     <!--    ADDED--> <link href="{{ asset('assets/css/light/authentication/auth-cover.css') }}" rel="stylesheet" type="text/css" />
     <link href="{{ asset('assets/css/custom.css') }}" rel="stylesheet" id="user-style-default" />
 
+    <!-- FastShip soft-dark theme (loaded last so it overrides the template) -->
+    <link href="{{ asset('assets/css/fastship-theme.css') }}" rel="stylesheet" type="text/css" />
 </head>
 
 <body class="login-body d-flex align-items-center justify-content-end" style="margin:0; padding:0;">
