@@ -45,5 +45,7 @@
     }
 
     </style>
+    <!-- FastShip soft-dark theme (loaded last so it overrides the template) -->
+    <link href="{{ asset('assets/css/fastship-theme.css') }}" rel="stylesheet" type="text/css" />
 </head>
 
