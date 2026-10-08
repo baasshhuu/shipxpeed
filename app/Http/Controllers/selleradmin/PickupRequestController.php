@@ -47,7 +47,7 @@ class PickupRequestController extends Controller
 
             $response = $client->post('fm/request/new/', [
                 'headers' => [
-                    'Authorization' => 'Token 8db602386ed6a872cc18a51b489c32ecb27d0eb4',
+                    'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
                     'Content-Type'  => 'application/json',
                     'Accept'        => 'application/json',
                 ],

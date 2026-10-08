@@ -1472,7 +1472,7 @@ public function callDtdcAPI(array $params): array
     // private function callDelhiveryAPI(array $params): array
     // {
     //     try {
-    //         $token = "a6cd5bb955fddcb41757ec23ee92cf62b6650607";
+    //         $token = \App\Services\DelhiveryHelper::token();
     //         $url = 'https://track.delhivery.com/c/api/pin-codes/json/';
 
     //         $originPin = $params['origin_pincode'];
@@ -1724,7 +1724,7 @@ public function callDtdcAPI(array $params): array
     // { 
     //     // echo 'ssxs';
     //     try {
-    //         $token = "a6cd5bb955fddcb41757ec23ee92cf62b6650607";
+    //         $token = \App\Services\DelhiveryHelper::token();
     //         $url = 'https://track.delhivery.com/c/api/pin-codes/json/';
 
     //         $originPin = $params['origin_pincode'];
@@ -2522,7 +2522,7 @@ public function callDtdcAPI(array $params): array
             $warehouseResponse = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-                'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
             ])->post($warehouseUrl, $warehousePayload);
 
             $warehouseData = $warehouseResponse->json();
@@ -2569,7 +2569,7 @@ public function callDtdcAPI(array $params): array
 
             $orderResponse = Http::asForm()->withHeaders([
                 'Accept' => 'application/json',
-                'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
             ])->post($orderCreateUrl, [
                 'format' => 'json',
                 'data' => json_encode($orderPayload),

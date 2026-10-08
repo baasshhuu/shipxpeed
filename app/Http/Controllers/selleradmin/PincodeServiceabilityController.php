@@ -45,7 +45,7 @@ class PincodeServiceabilityController extends Controller
             $client = new Client();
             $response = $client->get("https://track.delhivery.com/c/api/pin-codes/json", [
                 'query' => [
-                    'token' => '8db602386ed6a872cc18a51b489c32ecb27d0eb4',
+                    'token' => \App\Services\DelhiveryHelper::token(),
                     'filter_codes' => $request->pincode,
                 ],
                 'verify' => false,

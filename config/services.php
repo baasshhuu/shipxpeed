@@ -31,4 +31,9 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'delhivery' => [
+        'token' => env('DELHIVERY_API_TOKEN'),
+        'base_url' => env('DELHIVERY_BASE_URL', 'https://track.delhivery.com'),
+    ],
+
 ];

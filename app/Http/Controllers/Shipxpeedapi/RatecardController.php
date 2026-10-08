@@ -302,7 +302,7 @@ class RatecardController extends Controller
                 $payment = 'Pre-paid';
             }
 
-            $delhiveryToken = "a6cd5bb955fddcb41757ec23ee92cf62b6650607";
+            $delhiveryToken = \App\Services\DelhiveryHelper::token();
 
             $delhiveryModes = ['E' => 'Express'];
 
@@ -376,7 +376,7 @@ class RatecardController extends Controller
             }
 
 
-            $delhiveryToken = "a6cd5bb955fddcb41757ec23ee92cf62b6650607";
+            $delhiveryToken = \App\Services\DelhiveryHelper::token();
 
             $delhiveryModes = ['S' => 'Surface'];
 

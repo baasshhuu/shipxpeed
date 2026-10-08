@@ -354,7 +354,7 @@ class DelhiveryB2CService implements CourierServiceInterface
 //         // dd($params);
 //                 // $PriceSetting = PriceSetting::where(['seller_id' => $seller_id, 'LogisticProvider' => 'Delhivery'])->first();
 
-//         $token = "a6cd5bb955fddcb41757ec23ee92cf62b6650607";
+//         $token = \App\Services\DelhiveryHelper::token();
 
 //         $url = 'https://track.delhivery.com/c/api/pin-codes/json/';
 
@@ -608,13 +608,21 @@ public function reversegetServiceability(array $params): array
         $seller = Auth::guard('seller')->user();
         $order_number = $orderPayload['shipments'][0]['order'] ?? null;
         $order = Order::where(['order_number' => $order_number, 'seller_id' => $seller->id])->first();
+        if (!$order) {
+            $order = Order::where(['customer_order_id' => $order_number, 'seller_id' => $seller->id])->latest('id')->first();
+        }
+        if (!$order) {
+            return ['status' => false, 'message' => 'Order not found for order number: ' . $order_number];
+        }
+        $orderPayload = \App\Services\DelhiveryHelper::normalizePayload($orderPayload, $order);
+        $pickup = $orderPayload['pickup_location'];
         $seller_amount_walate = $order->seller_amount_walate ?? 0;
         // dd($order);
 
 
         $warehousePayload = [
             "name" => $pickup['name'],
-            "email" => "test@gmail.com",
+            "email" => config('mail.from.address') ?: 'support@shipxpeed.com',
             "phone" => $pickup['phone'],
             "address" => $pickup['add'],
             "city" => $pickup['city'],
@@ -629,15 +637,16 @@ public function reversegetServiceability(array $params): array
     //  dd($warehousePayload);
         try {
             // Step 1: Create Warehouse
-            $warehouseUrl = "https://track.delhivery.com/api/backend/clientwarehouse/create/";
+            $warehouseUrl = \App\Services\DelhiveryHelper::baseUrl() . "/api/backend/clientwarehouse/create/";
 
             $warehouseResponse = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-                'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
             ])->post($warehouseUrl, $warehousePayload);
 
             $warehouseData = $warehouseResponse->json();
+            \App\Services\DelhiveryHelper::log('warehouse.create', $warehousePayload, $warehouseResponse);
             //  dd($warehouseData);
             // Step 2: Check if warehouse already exists error
             if (
@@ -645,12 +654,9 @@ public function reversegetServiceability(array $params): array
                 str_contains($warehouseData['error'][0], 'already exists CLIENT_STORES_CREATE')
             ) {
                 // Allowed — continue to create order
-            } elseif (!$warehouseResponse->successful() || $warehouseData['success'] === false) {
+            } elseif (!$warehouseResponse->successful() || ($warehouseData['success'] ?? null) === false) {
                 // Some other warehouse error
-                return [
-                    'status' => false,
-                    'message' => 'Warehouse creation failed: ' . ($warehouseData['error'][0] ?? 'Unknown error')
-                ];
+                \Log::warning('[Delhivery] warehouse create returned an error, continuing with order', ['response' => $warehouseData]);
             }
 
 
@@ -677,11 +683,11 @@ public function reversegetServiceability(array $params): array
             }
 
 
-            $orderCreateUrl = "https://track.delhivery.com/api/cmu/create.json";
+            $orderCreateUrl = \App\Services\DelhiveryHelper::baseUrl() . "/api/cmu/create.json";
 
             $orderResponse = Http::asForm()->withHeaders([
                 'Accept' => 'application/json',
-                'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
             ])->post($orderCreateUrl, [
                 'format' => 'json',
                 'data' => json_encode($orderPayload),
@@ -689,12 +695,13 @@ public function reversegetServiceability(array $params): array
 
 
             $responseData = $orderResponse->json();
+            \App\Services\DelhiveryHelper::log('order.create', $orderPayload, $orderResponse);
             // dd($responseData);
             if (!$orderResponse->successful() || ($responseData['success'] ?? false) === false) {
                 //  echo 'scascac';die;
                 return [
                     'status' => false,
-                    'message' => 'Order creation failed: ' . ($responseData['rmk'] ?? 'Unknown error')
+                    'message' => 'Order creation failed: ' . \App\Services\DelhiveryHelper::errorMessage($responseData)
                 ];
             }
 
@@ -734,7 +741,7 @@ public function reversegetServiceability(array $params): array
 
     public function cancelShipment($awb)
     {
-        $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607'; // <-- Replace with actual token
+        $token = \App\Services\DelhiveryHelper::token(); // <-- Replace with actual token
 
         $seller = Auth::guard('seller')->user();
         $order = Order::where('awb_number', $awb)->first();
@@ -742,12 +749,13 @@ public function reversegetServiceability(array $params): array
         $response = Http::withHeaders([
             'Authorization' => 'Token ' . $token,
             'Content-Type'  => 'application/json',
-        ])->post('https://track.delhivery.com/api/p/edit', [
+        ])->post(\App\Services\DelhiveryHelper::baseUrl() . '/api/p/edit', [
             'waybill'      => $awb,
             'cancellation' => 'true',
         ]);
 
-        if ($response->successful()) {
+        \App\Services\DelhiveryHelper::log('order.cancel', ['waybill' => $awb], $response);
+        if ($response->successful() && ($response->json('status') ?? true) !== false) {
 
             $order->order_status = 'cancelled';
             $order->save();
@@ -784,7 +792,7 @@ public function reversegetServiceability(array $params): array
 
     public function cancelShipmentBulk(array $awbs): array
     {
-        $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607'; // Ideally store securely in .env or config
+        $token = \App\Services\DelhiveryHelper::token(); // Ideally store securely in .env or config
         $seller = Auth::guard('seller')->user();
 
         $results = [
@@ -806,12 +814,13 @@ public function reversegetServiceability(array $params): array
             $response = Http::withHeaders([
                 'Authorization' => 'Token ' . $token,
                 'Content-Type'  => 'application/json',
-            ])->post('https://track.delhivery.com/api/p/edit', [
+            ])->post(\App\Services\DelhiveryHelper::baseUrl() . '/api/p/edit', [
                 'waybill'      => $awb,
                 'cancellation' => 'true',
             ]);
 
-            if ($response->successful()) {
+            \App\Services\DelhiveryHelper::log('order.cancel', ['waybill' => $awb], $response);
+        if ($response->successful() && ($response->json('status') ?? true) !== false) {
                 // Update order status
                 $order->order_status = 'cancelled';
                 $order->save();
@@ -985,6 +994,14 @@ private function processSingleOrderAssignmentBulk($orderPayload)
 
     $order_number = $orderPayload['shipments'][0]['order'] ?? null;
     $order = Order::where(['order_number' => $order_number, 'seller_id' => $seller->id])->first();
+        if (!$order) {
+            $order = Order::where(['customer_order_id' => $order_number, 'seller_id' => $seller->id])->latest('id')->first();
+        }
+        if (!$order) {
+            return ['status' => false, 'message' => 'Order not found for order number: ' . $order_number];
+        }
+        $orderPayload = \App\Services\DelhiveryHelper::normalizePayload($orderPayload, $order);
+        $pickup = $orderPayload['pickup_location'];
     
     if (!$order) {
         return ['status' => false, 'message' => 'Order not found for order number: ' . $order_number];
@@ -994,7 +1011,7 @@ private function processSingleOrderAssignmentBulk($orderPayload)
 
     $warehousePayload = [
         "name" => $pickup['name'],
-        "email" => "test@gmail.com",
+        "email" => config('mail.from.address') ?: 'support@shipxpeed.com',
         "phone" => $pickup['phone'],
         "address" => $pickup['add'],
         "city" => $pickup['city'],
@@ -1009,15 +1026,16 @@ private function processSingleOrderAssignmentBulk($orderPayload)
 
     try {
         // Step 1: Create Warehouse
-        $warehouseUrl = "https://track.delhivery.com/api/backend/clientwarehouse/create/";
+        $warehouseUrl = \App\Services\DelhiveryHelper::baseUrl() . "/api/backend/clientwarehouse/create/";
 
         $warehouseResponse = Http::withHeaders([
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
-            'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+            'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
         ])->post($warehouseUrl, $warehousePayload);
 
         $warehouseData = $warehouseResponse->json();
+            \App\Services\DelhiveryHelper::log('warehouse.create', $warehousePayload, $warehouseResponse);
 
         // Step 2: Check if warehouse already exists error
         if (
@@ -1025,12 +1043,9 @@ private function processSingleOrderAssignmentBulk($orderPayload)
             str_contains($warehouseData['error'][0], 'already exists CLIENT_STORES_CREATE')
         ) {
             // Allowed — continue to create order
-        } elseif (!$warehouseResponse->successful() || $warehouseData['success'] === false) {
+        } elseif (!$warehouseResponse->successful() || ($warehouseData['success'] ?? null) === false) {
             // Some other warehouse error
-            return [
-                'status' => false,
-                'message' => 'Warehouse creation failed: ' . ($warehouseData['error'][0] ?? 'Unknown error')
-            ];
+            \Log::warning('[Delhivery] warehouse create returned an error, continuing with order', ['response' => $warehouseData]);
         }
 
         $sellerRechargeAmount = Recharge::where('seller_id', $seller->id)
@@ -1054,22 +1069,23 @@ private function processSingleOrderAssignmentBulk($orderPayload)
             ];
         }
 
-        $orderCreateUrl = "https://track.delhivery.com/api/cmu/create.json";
+        $orderCreateUrl = \App\Services\DelhiveryHelper::baseUrl() . "/api/cmu/create.json";
 
         $orderResponse = Http::asForm()->withHeaders([
             'Accept' => 'application/json',
-            'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+            'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
         ])->post($orderCreateUrl, [
             'format' => 'json',
             'data' => json_encode($orderPayload),
         ]);
 
         $responseData = $orderResponse->json();
+            \App\Services\DelhiveryHelper::log('order.create', $orderPayload, $orderResponse);
 
         if (!$orderResponse->successful() || ($responseData['success'] ?? false) === false) {
             return [
                 'status' => false,
-                'message' => 'Order creation failed: ' . ($responseData['rmk'] ?? 'Unknown error')
+                'message' => 'Order creation failed: ' . \App\Services\DelhiveryHelper::errorMessage($responseData)
             ];
         }
 

@@ -1150,7 +1150,7 @@ public function getSmartshipLabel(Request $request)
             Log::info('Fetching Delhivery B2C Label for AWB:', ['awb' => $awb]);
 
             $response = Http::withHeaders([
-                'Authorization' => 'Token a6cd5bb955fddcb41757ec23ee92cf62b6650607',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
                 'Content-Type' => 'application/json',
             ])->get("https://track.delhivery.com/api/p/packing_slip", [
                         'wbns' => $awb,

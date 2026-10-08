@@ -51,7 +51,7 @@ public function createManifest(Request $request)
 
         $response = $client->post('https://track.delhivery.com/api/cmu/create.json', [
             'headers' => [
-                'Authorization' => 'Token 8db602386ed6a872cc18a51b489c32ecb27d0eb4',
+                'Authorization' => 'Token ' . \App\Services\DelhiveryHelper::token(),
                 'Content-Type' => 'application/x-www-form-urlencoded'
             ],
             'form_params' => [

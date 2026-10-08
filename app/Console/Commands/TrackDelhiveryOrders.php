@@ -566,7 +566,7 @@ private function RTO_Amount()
     private function trackDelhivery()
     {
        
-        $apiToken = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+        $apiToken = \App\Services\DelhiveryHelper::token();
 
         $orders = Order::where(function($q) {
                             $q->whereNull('shipping_status')
@@ -638,7 +638,7 @@ private function RTO_Amount()
 
 //     private function trackDelhivery()
 // {
-//     $apiToken = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+//     $apiToken = \App\Services\DelhiveryHelper::token();
 
 //     $orders = Order::where(function($q) {
 //                         $q->whereNull('shipping_status')
@@ -1053,7 +1053,7 @@ private function RTO_Amount()
     // private function trackDelhivery()
     // {
        
-    //     $apiToken = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+    //     $apiToken = \App\Services\DelhiveryHelper::token();
 
     //     $orders = Order::where(function($q) {
     //                         $q->whereNull('shipping_status')
@@ -1225,7 +1225,7 @@ private function RTO_Amount()
 
 //     private function trackDelhivery()
 //     {
-//         $apiToken = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+//         $apiToken = \App\Services\DelhiveryHelper::token();
 
 //         $orders = Order::where(function($q) {
 //                             $q->whereNull('shipping_status')

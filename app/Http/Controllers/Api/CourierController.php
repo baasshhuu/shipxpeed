@@ -663,13 +663,18 @@ public function handleDelhivery(Request $request): JsonResponse
 
 
 
+        $statusrr = null;
         if ($status === 'In Transit') {
            $statusrr = 'transit'; 
         }else if ($status === 'Out for delivery') {
               $statusrr = 'out for delivery';
         } else if ($status === 'Delivered') {
            $statusrr = 'delivered';
-        } else if ($status === 'RTO') {
+        } else if (in_array($status, ['Manifested', 'Not Picked', 'Open', 'Scheduled'])) {
+            $statusrr = 'pending pickup';
+        } else if (in_array($status, ['Dispatched'])) {
+            $statusrr = 'out for delivery';
+        } else if (in_array($status, ['RTO', 'Returned'])) {
            $statusrr = 'rto';
         }else if ($status === 'Cancelled') {
            $statusrr = 'cancelled';
@@ -678,8 +683,11 @@ public function handleDelhivery(Request $request): JsonResponse
         }
 
 
-     if ($order) {
+     if ($order && $statusrr) {
             $order->shipping_status = $statusrr;
+            if ($statusrr === 'delivered') {
+                $order->delivered_date = date('Y-m-d');
+            }
             $order->save();
         }
 

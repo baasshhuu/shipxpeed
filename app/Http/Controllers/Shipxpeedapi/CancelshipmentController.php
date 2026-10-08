@@ -331,7 +331,7 @@ class CancelshipmentController extends Controller
     private function cancelDelhiveryShipment($awb, $order, $sellerId)
     {
         try {
-            $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+            $token = \App\Services\DelhiveryHelper::token();
 
             $response = Http::withHeaders([
                 'Authorization' => 'Token ' . $token,
@@ -1072,7 +1072,7 @@ if ($request->courier === 'tekipost') {
 
 //     public function cancelShipment($awb)
 //     {
-//         $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607'; // <-- Replace with actual token
+//         $token = \App\Services\DelhiveryHelper::token(); // <-- Replace with actual token
 
 //         $seller = Auth::guard('seller')->user();
 //         $order = Order::where('awb_number', $awb)->first();

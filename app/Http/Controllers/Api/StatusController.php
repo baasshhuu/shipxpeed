@@ -2071,7 +2071,7 @@ public function apiTrackDelhivery(Request $request)
     try {
  
         // Static Delhivery token
-        $delhiveryToken = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+        $delhiveryToken = \App\Services\DelhiveryHelper::token();
 
         // Get orders pending delivery tracking
         $orders = Order::where(function ($q) {

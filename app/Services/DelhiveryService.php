@@ -45,7 +45,7 @@ class DelhiveryService implements CourierServiceInterface
         $response = Http::get($cfg['service_url'], [
             'pickup_postcode'   => $params['origin'],
             'delivery_postcode' => $params['destination'],
-            //  'token'             => "67f98dd67376fb9655edbdb0ad29027c90e12f88",
+            //  'token'             => \App\Services\DelhiveryHelper::token(),
             'token'             => $cfg['token'],
         ]);
 

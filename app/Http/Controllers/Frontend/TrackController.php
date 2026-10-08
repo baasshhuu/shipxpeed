@@ -49,7 +49,7 @@ private function trackWithDelhiveryB2C($awb)
             throw new \Exception("AWB number is missing.");
         }
 
-        $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607';
+        $token = \App\Services\DelhiveryHelper::token();
 
         $response = Http::withHeaders([
             'Authorization' => 'Token ' . $token,
@@ -102,7 +102,7 @@ private function trackWithDelhiveryB2C($awb)
 // private function trackWithDelhiveryB2C($awb)
 // {
 //     try {
-//         $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607'; // use your token
+//         $token = \App\Services\DelhiveryHelper::token(); // use your token
 
 //         $response = Http::withHeaders([
 //             'Authorization' => 'Token ' . $token,
@@ -158,7 +158,7 @@ private function trackWithDelhiveryB2C($awb)
 // private function trackWithDelhiveryB2C($awb)
 // {
 //     try {
-//         $token = 'a6cd5bb955fddcb41757ec23ee92cf62b6650607'; // Replace with your real token
+//         $token = \App\Services\DelhiveryHelper::token(); // Replace with your real token
 //         $response = Http::withHeaders([
 //             'Authorization' => 'Token ' . $token,
 //             'Content-Type' => 'application/json',
