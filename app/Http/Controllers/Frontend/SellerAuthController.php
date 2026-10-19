@@ -199,71 +199,66 @@ class SellerAuthController extends Controller
 
 
     public function completeKyc(Request $request)
-{
-    // dd($request);
-    $validator = Validator::make($request->all(), [
-        'bank_name'             => 'required',
-        'bank_account_verified' => 'required',
-        'gst_verified_name'     => 'nullable',
-        'pan_verified_name'     => 'required',
-        'account_number'        => 'required',
-        'ifsc_code'             => 'required',
-        'gst_number'            => 'nullable',
-        'pan_number'            => 'required',
-    ]);
-
-    if ($validator->fails()) {
-        return redirect()->back()
-            ->withErrors($validator)
-            ->withInput()
-            ->with('error', 'Please correct the errors in the form.');
-    }
-
-    try {
+    {
         $authSeller = Auth::guard('seller')->user();
-
         if (!$authSeller) {
             return redirect()->back()->with('error', 'Unauthorized or seller not found.');
         }
 
         $seller = SellerList::find($authSeller->id);
-
         if (!$seller) {
             return redirect()->back()->with('error', 'Seller not found in database.');
         }
 
-        // Optional: Check if bank details already exist to prevent duplicate entry
-        SellerBankDetail::updateOrCreate(
-            ['seller_id' => $seller->id], // assumes there's a seller_id column
-            [
-                'account_number'      => $request->account_number,
-                'account_holder_name' => $request->bank_name,
-                'ifsc_code'           => $request->ifsc_code,
-            ]
-        );
+        if ((int) $seller->agreement_accepted !== 1) {
+            return redirect()->back()->with('error', 'Please sign the Client Service Agreement with Aadhaar first.');
+        }
 
-        $seller->update([
-            'bank_account_verified' => $request->bank_account_verified,
-            'gst_verified_name'     => $request->gst_verified_name,
-            'pan_verified_name'     => $request->pan_verified_name,
-            'account_number'        => $request->account_number,
-            'ifsc_code'             => $request->ifsc_code,
-            'bank_name'             => $request->bank_name,
-            'pan_number'            => $request->pan_number,
-            'gst_no'                => $request->gst_number,
-            'status'                => 1,
-            'kyc_status'            => 1,
-        ]);
+        // Only values verified by Cashfree on the server are trusted (see CashfreeController)
+        $key = fn ($w) => \App\Http\Controllers\selleradmin\CashfreeController::sessionKey($w);
+        $pan  = session($key('pan'));
+        $gst  = session($key('gst'));
+        $bank = session($key('bank'));
 
-        return redirect()->back()->with('success', 'KYC completed successfully.');
-    } catch (\Exception $e) {
-        // dd($e->getMessage());
-        \Log::error('KYC Error: ' . $e->getMessage());
+        if (!$pan) {
+            return redirect()->back()->with('error', 'Please verify your PAN.');
+        }
+        if (!$bank) {
+            return redirect()->back()->with('error', 'Please verify your bank account.');
+        }
 
-        return redirect()->back()
-            ->with('error', 'Something went wrong while completing KYC.');
+        try {
+            SellerBankDetail::updateOrCreate(
+                ['seller_id' => $seller->id],
+                [
+                    'account_number'      => $bank['bank_account'],
+                    'account_holder_name' => $bank['name_at_bank'],
+                    'ifsc_code'           => $bank['ifsc'],
+                ]
+            );
+
+            $seller->update([
+                'bank_account_verified' => $bank['bank_account'],
+                'bank_name'             => $bank['name_at_bank'],
+                'account_number'        => $bank['bank_account'],
+                'ifsc_code'             => $bank['ifsc'],
+                'pan_verified_name'     => $pan['registered_name'],
+                'pan_number'            => $pan['pan'],
+                'gst_verified_name'     => $gst['legal_name_of_business'] ?? null,
+                'gst_no'                => $gst['gstin'] ?? null,
+                'status'                => 1,
+                'kyc_status'            => 1,
+            ]);
+
+            session()->forget([$key('pan'), $key('gst'), $key('bank')]);
+
+            return redirect()->back()->with('success', 'KYC completed successfully.');
+        } catch (\Exception $e) {
+            \Log::error('KYC Error: ' . $e->getMessage());
+
+            return redirect()->back()->with('error', 'Something went wrong while completing KYC.');
+        }
     }
-}
 
 
 
