@@ -129,6 +129,11 @@ Route::post('/verify-gst', [CashfreeController::class, 'verifyGST'])->name('gst.
 Route::post('/cin-verify', [CashfreeController::class, 'verifyCIN'])->name('cin.verify');
 Route::post('/bank-verify', [CashfreeController::class, 'verifyBankAccount'])->name('bank.verify');
 
+// Seller onboarding: Aadhaar (DigiLocker) e-sign for the Client Service Agreement
+Route::post('/seller/kyc/digilocker/start', [CashfreeController::class, 'digilockerStart'])->middleware('auth:seller')->name('seller.digilocker.start');
+Route::get('/seller/kyc/digilocker/status', [CashfreeController::class, 'digilockerStatus'])->middleware('auth:seller')->name('seller.digilocker.status');
+Route::get('/seller/kyc/digilocker/return', [CashfreeController::class, 'digilockerReturn'])->name('seller.digilocker.return');
+
 Route::post('/submitKyc', [CashfreeController::class, 'submitKyc'])->name('submitKyc');
 
 
