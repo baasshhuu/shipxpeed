@@ -281,6 +281,15 @@
         </div>
         
         <div style="clear: both;"></div>
+    @isset($signature)
+    <div style="margin-top: 25px; border: 1px solid #2e7d32; padding: 10px; font-size: 11px;">
+        <p style="margin:0 0 6px 0;"><strong>ELECTRONICALLY SIGNED BY CLIENT USING AADHAAR</strong></p>
+        <p style="margin:0;">Signed by: <strong>{{ $signature['name'] }}</strong> &nbsp;|&nbsp; Aadhaar: {{ $signature['uid_masked'] }} &nbsp;|&nbsp; DOB: {{ $signature['dob'] }}</p>
+        <p style="margin:0;">Address: {{ $clientAddress }}</p>
+        <p style="margin:0;">Method: {{ $signature['method'] }} &nbsp;|&nbsp; Verification ID: {{ $signature['verification_id'] }} &nbsp;|&nbsp; Ref: {{ $signature['reference_id'] }}</p>
+        <p style="margin:0;">Signed at: {{ $signature['signed_at'] }} &nbsp;|&nbsp; IP: {{ $signature['ip'] }}</p>
+    </div>
+    @endisset
     </div>
 </body>
 </html>
