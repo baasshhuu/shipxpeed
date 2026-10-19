@@ -24,6 +24,9 @@ return [
 
     'timeout' => (int) env('CASHFREE_KYC_TIMEOUT', 30),
 
+    // Optional x-api-version header (leave empty for Cashfree defaults)
+    'api_version' => env('CASHFREE_KYC_API_VERSION'),
+
     // Seller must finish Aadhaar (DigiLocker) before KYC can be completed.
     'require_aadhaar' => (bool) env('CASHFREE_KYC_REQUIRE_AADHAAR', true),
 ];
