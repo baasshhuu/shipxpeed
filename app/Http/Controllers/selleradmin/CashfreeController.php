@@ -2,534 +2,276 @@
 
 namespace App\Http\Controllers\selleradmin;
 
-use App\Models\Recharge;
+use App\Http\Controllers\Controller;
+use App\Services\CashfreeKyc;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Log;
-use App\Models\LogisticProvider;
-use App\Models\Order;
-use App\Models\PriceSetting;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
+/**
+ * Seller onboarding verification (Cashfree Secure ID).
+ *
+ * Flow (same as the old panel):
+ *   1. Client Service Agreement is signed with Aadhaar  -> DigiLocker (Cashfree discontinued Aadhaar OTP)
+ *   2. Then KYC: PAN -> GSTIN -> Bank account + IFSC     -> SellerAuthController@completeKyc
+ *
+ * Verified results are kept server-side in the session so the final
+ * submit cannot be faked from the browser.
+ */
 class CashfreeController extends Controller
 {
-
-
-
-    public function submitKyc(Request $request)
-{
-    dd($request);
-    $validated = $request->validate([
-        'account_number' => 'required|string',
-        'ifsc_code'      => 'required|string',
-        'gst_number'     => 'required|string|max:15',
-        'pan_number'     => 'required|string|max:10',
-    ]);
-
-    // Save KYC data
-    KycDetail::create([
-        'seller_id'      => auth()->id(),
-        'account_number' => $validated['account_number'],
-        'ifsc_code'      => $validated['ifsc_code'],
-        'gst_number'     => $validated['gst_number'],
-        'pan_number'     => $validated['pan_number'],
-    ]);
-
-    return back()->with('success', 'KYC submitted successfully!');
-}
-
-   
-public function verifyBankAccount(Request $request)
-{
-    $request->validate([
-        'account_number' => 'required|string',
-        'ifsc'           => 'required|string',
-    ]);
-
-    $referenceId = Str::uuid()->toString();
-
-    $base = env('CASHFREE_ENV') === 'production'
-        ? 'https://api.cashfree.com'
-        : 'https://sandbox.cashfree.com';
-
-    // <-- THE IMPORTANT FIX
-    $url = $base . '/verification/bank-account/sync';
-
-    $res = Http::withHeaders([
-        'x-client-id'     => env('CASHFREE_CLIENT_ID'),
-        'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),
-        'x-api-version'   => '2023-01-01',
-        'accept'          => 'application/json',
-        'content-type'    => 'application/json',
-    ])->post($url, [
-        'bank_account' => $request->account_number,
-        'ifsc'         => $request->ifsc,
-        'reference_id' => $referenceId,
-        // Optional if your plan supports:
-        // 'name' => $request->account_holder_name,
-        // 'phone' => $request->phone,
-    ]);
-
-    $json = $res->json();
-
-    if ($res->successful()) {
-        return response()->json([
-            'ok'   => true,
-            'data' => [
-                'status'       => data_get($json, 'status', 'SUCCESS'),
-                'name_at_bank' => data_get($json, 'name_at_bank'),
-                'bank_account' => data_get($json, 'bank_account'),
-                'ifsc'         => data_get($json, 'ifsc'),
-                'reference_id' => $referenceId,
-                'raw'          => $json,
-            ]
-        ]);
+    public function __construct(protected CashfreeKyc $kyc)
+    {
     }
 
-    return response()->json([
-        'ok'    => false,
-        'error' => data_get($json, 'message', 'Bank account verification failed'),
-        'raw'   => $json,
-    ], $res->status() ?: 400);
-}
+    public static function sessionKey(string $what): string
+    {
+        $id = Auth::guard('seller')->id() ?? 'guest';
 
-
-
-
-
-
-public function verifyCIN(Request $request)
-{
-    $request->validate([
-        'cin_number' => 'required|string|max:21', // CIN format length
-    ]);
-
-    $cin = $request->cin_number;
-
-    $url = env('CASHFREE_ENV') === 'production' 
-        ? 'https://api.cashfree.com/verification/api/v1/cin'
-        : 'https://sandbox.cashfree.com/verification/api/v1/cin';
-
-    $response = Http::withHeaders([
-        'x-client-id'     => env('CASHFREE_CLIENT_ID'),
-        'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),
-        'x-api-version'   => '2023-01-01',
-        'accept'          => 'application/json',
-        'content-type'    => 'application/json',
-    ])->post($url, [
-        'cin' => $cin,
-    ]);
-
-    if ($response->successful()) {
-        $data = $response->json();
-        return response()->json(['ok' => true, 'data' => $data]);
-    } else {
-        return response()->json(['ok' => false, 'error' => $response->json('message') ?? 'CIN verification failed']);
+        return "seller_kyc.{$id}.{$what}";
     }
-}
 
+    protected function seller()
+    {
+        return Auth::guard('seller')->user();
+    }
 
+    protected function unauthorized()
+    {
+        return response()->json(['ok' => false, 'error' => 'Please log in again.'], 401);
+    }
 
+    // ------------------------------------------------------------------
+    // Step 1: Aadhaar via DigiLocker (used to e-sign the agreement)
+    // ------------------------------------------------------------------
+
+    public function digilockerStart(Request $request)
+    {
+        if (!$this->seller()) {
+            return $this->unauthorized();
+        }
+
+        $verificationId = 'SX' . $this->seller()->id . '_' . Str::lower(Str::random(10));
+        $res = $this->kyc->digilockerCreateUrl($verificationId, route('seller.digilocker.return'));
+
+        if (!$res['ok'] || empty($res['data']['url'])) {
+            return response()->json(['ok' => false, 'error' => $res['error'] ?? 'Could not start DigiLocker.'], $res['status'] ?: 400);
+        }
+
+        session([self::sessionKey('digilocker_vid') => $verificationId]);
+        session()->forget(self::sessionKey('aadhaar'));
+
+        return response()->json(['ok' => true, 'url' => $res['data']['url'], 'verification_id' => $verificationId]);
+    }
+
+    /**
+     * Polled by the agreement modal. Once DigiLocker is AUTHENTICATED, fetch
+     * the Aadhaar and store it in the session.
+     */
+    public function digilockerStatus(Request $request)
+    {
+        if (!$this->seller()) {
+            return $this->unauthorized();
+        }
+
+        if ($aadhaar = session(self::sessionKey('aadhaar'))) {
+            return response()->json(['ok' => true, 'status' => 'VERIFIED', 'aadhaar' => $this->publicAadhaar($aadhaar)]);
+        }
+
+        $vid = session(self::sessionKey('digilocker_vid'));
+        if (!$vid) {
+            return response()->json(['ok' => false, 'status' => 'NOT_STARTED', 'error' => 'Please click "Verify Aadhaar with DigiLocker" first.']);
+        }
+
+        $status = $this->kyc->digilockerStatus($vid);
+        if (!$status['ok']) {
+            return response()->json(['ok' => false, 'status' => 'ERROR', 'error' => $status['error']]);
+        }
+
+        $state = strtoupper($status['data']['status'] ?? 'PENDING');
+        if ($state !== 'AUTHENTICATED') {
+            $messages = [
+                'PENDING'        => 'Waiting for you to finish DigiLocker…',
+                'EXPIRED'        => 'The DigiLocker link expired. Please start again.',
+                'CONSENT_DENIED' => 'You denied consent in DigiLocker. Please start again and allow access to Aadhaar.',
+            ];
+
+            return response()->json(['ok' => false, 'status' => $state, 'error' => $messages[$state] ?? 'DigiLocker status: ' . $state]);
+        }
+
+        $doc = $this->kyc->digilockerAadhaar($vid);
+        if (!$doc['ok']) {
+            return response()->json(['ok' => false, 'status' => 'ERROR', 'error' => $doc['error']]);
+        }
+        if (strtoupper($doc['data']['status'] ?? '') !== 'SUCCESS' || empty($doc['data']['name'])) {
+            return response()->json(['ok' => false, 'status' => 'AADHAAR_NOT_LINKED', 'error' => 'No Aadhaar found in your DigiLocker. Please link Aadhaar in DigiLocker and try again.']);
+        }
+
+        $d = $doc['data'];
+        $split = $d['split_address'] ?? [];
+        $address = collect([$split['house'] ?? null, $split['street'] ?? null, $split['landmark'] ?? null, $split['vtc'] ?? null,
+            $split['po'] ?? null, $split['subdist'] ?? null, $split['dist'] ?? null, $split['state'] ?? null, $split['pincode'] ?? null])
+            ->filter()->implode(', ');
+
+        $aadhaar = [
+            'name'            => $d['name'],
+            'care_of'         => $d['care_of'] ?? '',
+            'dob'             => $d['dob'] ?? '',
+            'gender'          => $d['gender'] ?? '',
+            'uid_masked'      => $d['uid'] ?? '',
+            'address'         => $address,
+            'pincode'         => $split['pincode'] ?? '',
+            'state'           => $split['state'] ?? '',
+            'verification_id' => $vid,
+            'reference_id'    => $d['reference_id'] ?? ($status['data']['reference_id'] ?? null),
+            'verified_at'     => now()->toDateTimeString(),
+        ];
+        session([self::sessionKey('aadhaar') => $aadhaar]);
+
+        return response()->json(['ok' => true, 'status' => 'VERIFIED', 'aadhaar' => $this->publicAadhaar($aadhaar)]);
+    }
+
+    /** Where DigiLocker sends the seller back (only used when the site runs on https). */
+    public function digilockerReturn()
+    {
+        return response('<html><body style="font-family:sans-serif;text-align:center;padding:40px">'
+            . '<h3>DigiLocker step complete</h3><p>You can close this tab and return to Shipxpeed.</p>'
+            . '<script>setTimeout(function(){window.close()},1500)</script></body></html>');
+    }
+
+    protected function publicAadhaar(array $a): array
+    {
+        return array_intersect_key($a, array_flip(['name', 'care_of', 'dob', 'gender', 'uid_masked', 'address']));
+    }
+
+    // Old Aadhaar-OTP endpoints: Cashfree discontinued Aadhaar OTP; kept so old pages fail gracefully.
+    public function generateOtp()
+    {
+        return response()->json(['ok' => false, 'error' => 'Aadhaar OTP is discontinued. Please use "Verify Aadhaar with DigiLocker".'], 410);
+    }
+
+    public function verifyOtp()
+    {
+        return $this->generateOtp();
+    }
+
+    // ------------------------------------------------------------------
+    // Step 2: KYC checks (allowed only after the agreement is signed)
+    // ------------------------------------------------------------------
+
+    protected function agreementGate()
+    {
+        $seller = $this->seller();
+        if (!$seller) {
+            return $this->unauthorized();
+        }
+        if ((int) $seller->agreement_accepted !== 1) {
+            return response()->json(['ok' => false, 'error' => 'Please sign the Client Service Agreement first.'], 403);
+        }
+
+        return null;
+    }
+
+    public function verifyPan(Request $request)
+    {
+        if ($r = $this->agreementGate()) {
+            return $r;
+        }
+        $request->merge(['pan_number' => strtoupper(trim((string) $request->pan_number))]);
+        $request->validate(['pan_number' => ['required', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]$/']], ['pan_number.regex' => 'Invalid PAN format']);
+
+        $res = $this->kyc->verifyPan($request->pan_number);
+        if (!$res['ok']) {
+            session()->forget(self::sessionKey('pan'));
+            return response()->json(['ok' => false, 'error' => $res['error']], 422);
+        }
+
+        $data = [
+            'pan'             => $request->pan_number,
+            'registered_name' => $res['data']['registered_name'] ?? ($res['data']['name_pan_card'] ?? ''),
+            'type'            => $res['data']['type'] ?? '',
+        ];
+        session([self::sessionKey('pan') => $data]);
+
+        return response()->json(['ok' => true, 'message' => 'PAN verified', 'data' => $data]);
+    }
 
     public function verifyGST(Request $request)
-{
-    $request->validate([
-        'gst_number' => 'required|string|max:15',
-    ]);
+    {
+        if ($r = $this->agreementGate()) {
+            return $r;
+        }
+        $request->merge(['gst_number' => strtoupper(trim((string) $request->gst_number))]);
+        $request->validate(['gst_number' => ['required', 'regex:/^[0-9]{2}[A-Z0-9]{13}$/']], ['gst_number.regex' => 'Invalid GSTIN format']);
 
-    $gstin = $request->gst_number;
-    $base = env('CASHFREE_ENV') === 'production'
-        ? 'https://api.cashfree.com'
-        : 'https://sandbox.cashfree.com';
-
-    $url = $base . '/verification/gstin';
-
-    try {
-        $res = Http::withHeaders([
-            'x-client-id'     => env('CASHFREE_CLIENT_ID'),
-            'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),
-            'accept'          => 'application/json',
-            'content-type'    => 'application/json',
-        ])->post($url, ['gstin' => $gstin]);
-
-        $data = $res->json();
-        //  dd($data);
-        if ($res->successful() && !empty($data['valid']) && $data['valid'] === true) {
-            return response()->json(['ok' => true, 'data' => $data]);
+        $res = $this->kyc->verifyGstin($request->gst_number);
+        if (!$res['ok']) {
+            session()->forget(self::sessionKey('gst'));
+            return response()->json(['ok' => false, 'error' => $res['error']], 422);
         }
 
-        return response()->json([
-            'ok'    => false,
-            'error' => $data['message'] ?? 'GST verification failed',
-            'data'  => $data,
-        ], $res->status() ?: 400);
-
-    } catch (\Throwable $e) {
-        return response()->json([
-            'ok'    => false,
-            'error' => 'Error during GST verification: ' . $e->getMessage(),
-        ], 500);
-    }
-}
-
-
-
-
-
-
-  
-public function verifyPan(Request $request)
-{
-    // 1) Validate PAN format
-    $request->validate([
-        'pan_number' => ['required', 'regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/']
-    ], [
-        'pan_number.regex' => 'Invalid PAN format'
-    ]);
-
-    $pan = $request->pan_number;
-
-    // 2) Pick correct URL (sandbox/prod)
-    $production = (bool) env('CASHFREE_PRODUCTION', false);
-    $url = $production
-        ? 'https://api.cashfree.com/verification/pan'
-        : 'https://sandbox.cashfree.com/verification/pan';
-
-    try {
-        // 3) Make the call
-        $res = Http::withHeaders([
-            'x-client-id'     => env('CASHFREE_CLIENT_ID'),
-            'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),
-            'Content-Type'    => 'application/json',
-        ])->post($url, [
-            'pan' => $pan,
-        ]);
-
-        $json = $res->json();
-
-        // 4) Normalize success condition
-        $isValid = data_get($json, 'valid') === true
-            || strtoupper((string) data_get($json, 'status')) === 'VALID';
-
-        if ($res->successful() && $isValid) {
-            return response()->json([
-                'ok'      => true,
-                'message' => data_get($json, 'message', 'PAN verified successfully'),
-                'data'    => [
-                    'pan'             => data_get($json, 'pan'),
-                    'type'            => data_get($json, 'type'),
-                    'reference_id'    => data_get($json, 'reference_id'),
-                    'registered_name' => data_get($json, 'registered_name'),
-                    'father_name'     => data_get($json, 'father_name'),
-                    'valid'           => data_get($json, 'valid'),
-                ],
-            ]);
-        }
-
-        // 5) Error case
-        return response()->json([
-            'ok'    => false,
-            'error' => data_get($json, 'message', 'PAN verification failed'),
-            'data'  => $json,
-        ], $res->status() ?: 400);
-
-    } catch (\Throwable $e) {
-        report($e);
-
-        return response()->json([
-            'ok'    => false,
-            'error' => 'Something went wrong while verifying PAN',
-        ], 500);
-    }
-}
-
-
-
-
-//     public function verifyPan(Request $request)
-// {
-//     $panNumber = $request->pan_number;
-
-//     $response = Http::withHeaders([
-//         'x-client-id'     => env('CASHFREE_CLIENT_ID'),
-//         'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),
-//         'Content-Type'    => 'application/json'
-//     ])->post('https://api.cashfree.com/verification/pan', [
-//         'pan' => $panNumber
-//     ]);
-
-//     $result = $response->json();
-//      dd($result);
-
-//     if (isset($result['status']) && $result['status'] === 'VALID') {
-//         return response()->json([
-//             'ok'   => true,
-//             'data' => $result,
-//             'message' => 'PAN verified successfully'
-//         ]);
-//     }
-
-//     return response()->json([
-//         'ok'    => false,
-//         'error' => $result['message'] ?? 'Verification failed'
-//     ]);
-// }
-
-
-
-// public function verifyPan(Request $request)
-// {
-//     $panNumber = $request->pan_number;
-
-//     $response = Http::withHeaders([
-//         'x-client-id'     => env('CASHFREE_CLIENT_ID'),  // Add your Cashfree Client ID
-//         'x-client-secret' => env('CASHFREE_CLIENT_SECRET'),  // Add your Cashfree Client Secret
-//         'Content-Type'    => 'application/json'
-//     ])->post('https://api.cashfree.com/verification/pan', [
-//         'pan' => $panNumber
-//     ]);
-
-//     $result = $response->json();
-
-//     if (isset($result['status']) && $result['status'] === 'VALID') {
-//         return response()->json([
-//             'ok'   => true,
-//             'data' => $result
-//         ]);
-//     }
-
-//     return response()->json([
-//         'ok'    => false,
-//         'error' => $result['message'] ?? 'Verification failed'
-//     ]);
-// }
-
-
-
-
-
-
-
-public function generateOtp(Request $request)
-{   
-    // dd($request);
-    $request->validate(['aadhaar_number' => 'required|digits:12']);
-    
-    $response = $this->sendOtpToCashfree($request->aadhaar_number);
-    //  dd($response);
-    
-    // If the Cashfree API call was successful, return the actual data
-    if ($response['ok']) {
-        return response()->json([
-            'ok' => true,
-            'data' => $response['data'],
-            'message' => $response['data']['message'] ?? 'OTP sent successfully'
-        ]);
-    }
-    
-    // Handle specific error cases
-    $errorMessage = $response['error']['message'] ?? 'Failed to send OTP';
-    $statusCode = $response['error']['status'] ?? 400;
-    
-    // For temporary server issues, suggest retry
-    if ($statusCode >= 500 || strpos($errorMessage, 'temporarily unavailable') !== false) {
-        $errorMessage = 'Service temporarily unavailable. Please wait a moment and try again.';
-        $statusCode = 503; // Service Unavailable
-    }
-    
-    return response()->json([
-        'ok' => false,
-        'error' => $errorMessage,
-        'details' => $response['error'],
-        'suggestion' => $statusCode >= 500 ? 'Please try again in a few minutes' : null
-    ], $statusCode);
-}
-
-public function verifyOtp(Request $request)
-{
-    $request->validate([
-        'ref_id' => 'required|string',
-        'otp'    => 'required|digits:6'
-    ]);
-
-    $response = $this->verifyOtpWithCashfree($request->ref_id, $request->otp);
-    // dd($response);
-    
-    // If the Cashfree API call was successful, return the actual data
-    if ($response['ok']) {
-        return response()->json([
-            'ok' => true,
-            'data' => $response['data'],
-            'message' => $response['data']['message'] ?? 'OTP verified successfully'
-        ]);
-    }
-    
-    // If there was an error, return the error details
-    return response()->json([
-        'ok' => false,
-        'error' => $response['error']['message'] ?? 'Failed to verify OTP',
-        'details' => $response['error']
-    ], $response['error']['status'] ?? 400);
-}
-
-
-
-
-
-
-
-
-
-
-
-/**
- * Cashfree पर Aadhaar के लिए OTP भेजो
- *
- * @param string $aadhaarNumber
- * @return array ['ok' => bool, 'data' => array|null, 'error' => array|null]
- */
-private function sendOtpToCashfree(string $aadhaarNumber): array
-{
-    $production = (bool) env('CASHFREE_PRODUCTION', false);
-
-    $url = $production
-        ? 'https://api.cashfree.com/verification/offline-aadhaar/otp'
-        : 'https://sandbox.cashfree.com/verification/offline-aadhaar/otp';
-
-    $payload = [
-        'aadhaar_number' => $aadhaarNumber,
-    ];
-
-    return $this->cashfreePost($url, $payload);
-}
-
-/**
- * Cashfree पर OTP verify करो
- *
- * @param string $refId
- * @param string $otp
- * @return array ['ok' => bool, 'data' => array|null, 'error' => array|null]
- */
-private function verifyOtpWithCashfree(string $refId, string $otp): array
-{
-    $production = (bool) env('CASHFREE_PRODUCTION', false);
-
-    $url = $production
-        ? 'https://api.cashfree.com/verification/offline-aadhaar/verify'
-        : 'https://sandbox.cashfree.com/verification/offline-aadhaar/verify';
-
-    $payload = [
-        'ref_id' => $refId,
-        'otp'    => $otp,
-    ];
-
-    return $this->cashfreePost($url, $payload);
-}
-
-/**
- * Low-level POST helper for Cashfree
- */
-
-
-
-private function cashfreePost(string $url, array $payload): array
-{
-    // dd($url, $payload);
-    $clientId     = env('CASHFREE_CLIENT_ID');
-    $clientSecret = env('CASHFREE_CLIENT_SECRET');
-
-    $headers = [
-        'Content-Type: application/json',
-        'x-client-id: ' . $clientId,
-        'x-client-secret: ' . $clientSecret,
-    ];
-
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => $headers,
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => json_encode($payload),
-        CURLOPT_CONNECTTIMEOUT => 20,
-        CURLOPT_TIMEOUT        => 40,
-    ]);
-
-    $raw  = curl_exec($ch);
-    $err  = curl_errno($ch);
-    $msg  = curl_error($ch);
-    $http = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($err) {
-        return [
-            'ok'    => false,
-            'data'  => null,
-            'error' => [
-                'type'    => 'network_error',
-                'code'    => $err,
-                'message' => $msg,
-                'status'  => $http,
-                'raw'     => $raw,
-            ],
+        $data = [
+            'gstin'                  => $request->gst_number,
+            'legal_name_of_business' => $res['data']['legal_name_of_business'] ?? '',
+            'trade_name_of_business' => $res['data']['trade_name_of_business'] ?? '',
+            'gst_in_status'          => $res['data']['gst_in_status'] ?? '',
         ];
+
+        // GSTIN characters 3-12 are the PAN of the business
+        $pan = session(self::sessionKey('pan'));
+        if ($pan && substr($request->gst_number, 2, 10) !== $pan['pan']) {
+            $data['pan_mismatch'] = true;
+        }
+
+        session([self::sessionKey('gst') => $data]);
+
+        return response()->json(['ok' => true, 'message' => 'GSTIN verified', 'data' => $data]);
     }
 
-    $json = json_decode($raw, true);
-    //  dd($json);
-    if ($http < 200 || $http >= 300) {
-        // Handle different error response formats from Cashfree
-        $errorMessage = 'Unknown error';
-        
-        if (isset($json['message'])) {
-            $errorMessage = $json['message'];
-        } elseif (isset($json['error_msg'])) {
-            $errorMessage = $json['error_msg'];
-        } elseif (isset($json['error']['message'])) {
-            $errorMessage = $json['error']['message'];
+    public function verifyBankAccount(Request $request)
+    {
+        if ($r = $this->agreementGate()) {
+            return $r;
         }
-        
-        // Provide user-friendly messages for common errors
-        if ($http == 502 || strpos($errorMessage, 'temporarily unavailable') !== false) {
-            $errorMessage = 'Cashfree service is temporarily unavailable. Please try again in a few minutes.';
-        } elseif ($http == 500) {
-            $errorMessage = 'Cashfree server error. Please try again later.';
-        } elseif ($http == 429) {
-            $errorMessage = 'Too many requests. Please wait a moment and try again.';
-        } elseif (strpos($errorMessage, 'Otp generated for this aadhaar') !== false) {
-            $errorMessage = 'An OTP was already sent for this Aadhaar number. Please wait before requesting a new OTP or use the existing one.';
+        $request->merge(['ifsc' => strtoupper(trim((string) $request->ifsc)), 'account_number' => preg_replace('/\s+/', '', (string) $request->account_number)]);
+        $request->validate([
+            'account_number' => ['required', 'regex:/^[A-Za-z0-9]{6,40}$/'],
+            'ifsc'           => ['required', 'regex:/^[A-Z]{4}0[A-Z0-9]{6}$/'],
+        ], ['ifsc.regex' => 'Invalid IFSC code', 'account_number.regex' => 'Invalid account number']);
+
+        $res = $this->kyc->verifyBank($request->account_number, $request->ifsc);
+        if (!$res['ok']) {
+            session()->forget(self::sessionKey('bank'));
+            return response()->json(['ok' => false, 'error' => $res['error']], 422);
         }
-        
-        return [
-            'ok'    => false,
-            'data'  => null,
-            'error' => [
-                'type'    => $json['type']    ?? 'api_error',
-                'code'    => $json['code']    ?? 'unknown_error',
-                'message' => $errorMessage,
-                'status'  => $http,
-                'raw'     => $json,
-            ],
+
+        $data = [
+            'bank_account' => $request->account_number,
+            'ifsc'         => $request->ifsc,
+            'name_at_bank' => $res['data']['name_at_bank'] ?? '',
+            'bank_name'    => $res['data']['bank_name'] ?? ($res['data']['ifsc_details']['bank'] ?? ''),
+            'branch'       => $res['data']['branch'] ?? ($res['data']['ifsc_details']['branch'] ?? ''),
         ];
+        session([self::sessionKey('bank') => $data]);
+
+        return response()->json(['ok' => true, 'message' => 'Bank account verified', 'data' => $data]);
     }
 
-    return [
-        'ok'    => true,
-        'data'  => $json,
-        'error' => null,
-    ];
-    dd([
-        'url' => $url,
-        'payload' => $payload,
-        'http' => $http,
-        'response' => $json,
-    ]);
-}
+    public function verifyCIN(Request $request)
+    {
+        if ($r = $this->agreementGate()) {
+            return $r;
+        }
+        $request->validate(['cin_number' => 'required|string|max:21']);
+        $res = $this->kyc->verifyCin($request->cin_number);
 
+        return $res['ok']
+            ? response()->json(['ok' => true, 'data' => $res['data']])
+            : response()->json(['ok' => false, 'error' => $res['error']], 422);
+    }
 
-
-
-  
-
+    public function submitKyc()
+    {
+        return redirect()->back()->with('error', 'Please use the KYC form on the dashboard.');
+    }
 }
