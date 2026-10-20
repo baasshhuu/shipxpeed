@@ -231,7 +231,18 @@ public function recharge()
         $totalAmount = $this->walletBalance($seller);
 
         if ($seller) {
-            $base = fn () => Recharge::where('seller_id', $seller->id)->where('type', 'Credit');
+            // Only real wallet top-ups (PayU / admin credits). Order-cancel
+            // refunds, RTO and weight adjustments are also stored as Credit
+            // rows, but they belong in the Passbook, not the recharge history.
+            $base = fn () => Recharge::where('seller_id', $seller->id)
+                ->where('type', 'Credit')
+                ->where(function ($q) {
+                    $q->whereNull('description')->orWhere(function ($w) {
+                        foreach (['%cancel%', '%refund%', '%rto%', '%weight%', '%order%'] as $p) {
+                            $w->whereRaw('LOWER(description) NOT LIKE ?', [$p]);
+                        }
+                    });
+                });
 
             $recharges = $base()->orderBy('created_at', 'desc')->paginate(10);
             $totalRecharged = $base()->where('status', 1)->sum('amount');
