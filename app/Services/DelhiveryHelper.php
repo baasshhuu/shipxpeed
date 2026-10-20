@@ -36,6 +36,7 @@ class DelhiveryHelper
      */
     public static function normalizePayload(array $payload, ?Order $order = null): array
     {
+        unset($payload['_order_id']);
         $shipments = $payload['shipments'] ?? [];
 
         foreach ($shipments as $i => $s) {
@@ -122,13 +123,23 @@ class DelhiveryHelper
         if (!empty($response['error'])) {
             $parts[] = is_array($response['error']) ? implode('; ', $response['error']) : $response['error'];
         }
+        foreach (['detail', 'message', 'msg', 'Error'] as $k) {
+            if (!empty($response[$k])) {
+                $parts[] = is_array($response[$k]) ? json_encode($response[$k]) : $response[$k];
+            }
+        }
         if (!self::isConfigured()) {
             $parts[] = 'DELHIVERY_API_TOKEN is not set in .env';
         }
 
         $parts = array_unique(array_filter(array_map('strval', $parts)));
 
-        return $parts ? implode(' | ', $parts) : 'Unknown error from Delhivery';
+        if (!$parts) {
+            // Fall back to the raw response so the real cause is visible
+            return 'Delhivery response: ' . mb_substr(json_encode($response), 0, 300);
+        }
+
+        return implode(' | ', $parts);
     }
 
     /**
