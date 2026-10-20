@@ -1420,9 +1420,28 @@ protected function prepareRequestData(Request $request)
 
 
         $logisticProvider = LogisticProvider::where('id', $courierId)->first();
+        if (!$logisticProvider) {
+            return redirect()->route('seller.order')->with('error', 'Selected courier is not available. Please refresh and try again.');
+        }
         $key = 'courier.' . $logisticProvider->code;
+        if (!app()->bound($key)) {
+            return redirect()->route('seller.order')->with('error', 'Courier "' . $logisticProvider->name . '" is not integrated yet.');
+        }
 
-        if ($courierId == '2') {
+        // Route by provider CODE, not by database id (ids differ between servers).
+        if ($logisticProvider->code === 'delhivery_b2c') {
+            $order = Order::where('id', $orderId)->first();
+            if (!$order) {
+                return redirect()->route('seller.order')->with('error', 'Order not found.');
+            }
+            $params = json_decode((string) $order->delhivery_b2c, true);
+            if (empty($params['shipments'][0]) || empty($params['pickup_location'])) {
+                return redirect()->route('seller.order')->with('error', 'Delhivery: this order has no saved shipping details. Please edit the order, re-select the warehouse and save it, then try again.');
+            }
+            $params['_order_id'] = $order->id;
+            $order->seller_amount_walate = $courierCharge;
+            $order->save();
+        } else if ($courierId == '2') {
 
            $params = [
                 'order_id' => $orderId,
@@ -1438,8 +1457,10 @@ protected function prepareRequestData(Request $request)
             $order->save();
         } else if ($courierId == '1') {
             $order = Order::where('id', $orderId)->first();
-            $params = json_decode($order->encode_data);
-            //  dd($params);
+            $params = json_decode((string) $order->encode_data);
+            if (!$params) {
+                return redirect()->route('seller.order')->with('error', 'This order has no saved shipping details for ' . $logisticProvider->name . '. Please edit and save the order, then try again.');
+            }
             $params->cod_charges = $codCharges;
             $params->courier_id = $serviceability_id;
 
@@ -1448,13 +1469,22 @@ protected function prepareRequestData(Request $request)
             $order->save();
         } else if ($courierId == '4') {
             $order = Order::where('id', $orderId)->first();
-            $params = json_decode($order->delhivery_b2c);
+            $params = json_decode($order->delhivery_b2c, true);
+            if (empty($params['shipments'][0]) || empty($params['pickup_location'])) {
+                return redirect()->route('seller.order')->with('error', 'Delhivery: this order has no saved shipping details. Please edit the order, re-select the warehouse and save it, then try again.');
+            }
+            // pass our internal order id so the service can always find the order
+            $params['_order_id'] = $order->id;
             $order->seller_amount_walate = $courierCharge;
             $order->save();
-   
+
         } else if ($courierId == '5') {
             $order = Order::where('id', $orderId)->first();
-            $params = json_decode($order->delhivery_b2c_air);
+            $params = json_decode($order->delhivery_b2c_air, true);
+            if (empty($params['shipments'][0]) || empty($params['pickup_location'])) {
+                return redirect()->route('seller.order')->with('error', 'Delhivery Air: this order has no saved shipping details. Please edit the order, re-select the warehouse and save it, then try again.');
+            }
+            $params['_order_id'] = $order->id;
             $order->seller_amount_walate = $courierCharge;
             $order->save();
 
@@ -1679,8 +1709,10 @@ if (
             }
         }
 
-        // If none matched
-        return redirect()->route('seller.order')->with('error', 'Failed to assign courier. Please try again later.');
+        // If none matched, show the courier's real reason instead of a generic message
+        $reason = is_array($response) ? ($response['message'] ?? $response['rmk'] ?? null) : null;
+        \Log::warning('[assignCourier] failed', ['order_id' => $orderId, 'courier_id' => $courierId, 'response' => $response]);
+        return redirect()->route('seller.order')->with('error', 'Failed to assign courier' . ($reason ? ': ' . (is_array($reason) ? implode('; ', $reason) : $reason) : '. Please try again later.'));
     }
 
 
