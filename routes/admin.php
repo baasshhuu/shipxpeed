@@ -6,6 +6,7 @@ use App\Http\Controllers\admin\BrandController;
 use App\Http\Controllers\admin\logisticsController;
 use App\Http\Controllers\admin\PriceSettingController;
 use App\Http\Controllers\admin\ZonePriceSettingController;
+use App\Http\Controllers\admin\RateSyncManagerController;
 
 use App\Http\Controllers\admin\ActiveslebsController;
 
@@ -298,6 +299,13 @@ Route::post('/SendWhatsApp-send-message', [\App\Http\Controllers\admin\SendWhats
         // Route::get('zone-pricesetting-add', 'add')->name('zone.pricesetting.add')->middleware('isAllow:104,can_add');
         // Route::post('zone-pricesetting-data-add', 'save')->name('zone.pricesetting.data.add')->middleware('isAllow:104,can_add');
      
+    });
+
+    // -------- Rate Sync Manager (zone-wise rates + active couriers; writes to the live engine tables) --------
+    Route::controller(RateSyncManagerController::class)->group(function () {
+        Route::get('rate-sync-manager',       'index')->name('rate.sync.manager')->middleware('isAllow:104,can_add');
+        Route::get('rate-sync-manager/rates', 'getRates')->name('rate.sync.manager.rates')->middleware('isAllow:104,can_add');
+        Route::post('rate-sync-manager/save', 'save')->name('rate.sync.manager.save')->middleware('isAllow:104,can_add');
     });
 
     Route::match(['get', 'post'], 'pricesetting/status/{id}/{status}', [logisticsController::class, 'status'])->name('pricesetting.status');
