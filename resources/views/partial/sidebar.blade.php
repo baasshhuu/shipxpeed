@@ -307,6 +307,14 @@
                 </div>
             </a>
         </li>
+        <li class="menu @routeis('rate.sync.manager') active @endrouteis">
+            <a href="{{ route('rate.sync.manager') }}" class="dropdown-toggle">
+                <div>
+                    <i class="fa-solid fa-sliders"></i>
+                    <span>Rate Sync Manager</span>
+                </div>
+            </a>
+        </li>
         <li class="menu @routeis('active.slebs') active @endrouteis">
             <a href="{{ route('active.slebs.add') }}" class="dropdown-toggle">
                 <div>
