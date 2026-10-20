@@ -142,7 +142,7 @@
     }
 </style>
 
-<div class="pc-content">
+<div class="pc-container fade-in">
 <div class="trk">
     <div class="trk-title">
         <div>
