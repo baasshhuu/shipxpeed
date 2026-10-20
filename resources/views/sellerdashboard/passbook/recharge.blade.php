@@ -651,7 +651,7 @@
                                         <td colspan="6" class="empty-state">
                                             <i class="ti ti-wallet-off"></i>
                                             <h4>No recharges yet</h4>
-                                            <p>Your wallet top-ups will appear here.</p>
+                                            <p>Your wallet top-ups will appear here. Order refunds are listed in the Passbook.</p>
                                         </td>
                                     </tr>
                                 @endforelse
