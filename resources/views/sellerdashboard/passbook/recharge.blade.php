@@ -573,150 +573,95 @@
                     </a>
                 </div>
 
-               
+                <!-- Recharge summary -->
+                <div class="row g-3 mb-3 animate-fade-in" style="margin-left:0;margin-right:0;">
+                    <div class="col-12 col-md-4">
+                        <div class="stat-card">
+                            <div class="text-muted small">Wallet balance</div>
+                            <div class="fs-4 fw-bold">₹{{ number_format($totalAmount ?? 0, 2) }}</div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="stat-card">
+                            <div class="text-muted small">Total recharged</div>
+                            <div class="fs-4 fw-bold">₹{{ number_format($totalRecharged ?? 0, 2) }}</div>
+                            @if(($pendingAmount ?? 0) > 0)
+                                <div class="small text-warning">₹{{ number_format($pendingAmount, 2) }} pending</div>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <div class="stat-card">
+                            <div class="text-muted small">Last recharge</div>
+                            <div class="fs-4 fw-bold">
+                                @if(!empty($lastRecharge))
+                                    ₹{{ number_format($lastRecharge->amount, 2) }}
+                                    <span class="small text-muted fw-normal">on {{ optional($lastRecharge->created_at)->format('M d, Y') }}</span>
+                                @else
+                                    —
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- Enhanced Table Section -->
+                <!-- Recharge history -->
                 <div class="table-container animate-fade-in" style="animation-delay: 0.4s;">
                     <div class="table-header">
-                        
-                        <div class="date-filter-wrapper">
-                            <i class="ti ti-calendar"></i>
-                            <input type="text" id="daterange" class="date-input" placeholder="Select Date Range">
-                        </div>
+                        <strong>Recharge history</strong>
                         <div>
                             <button class="enhanced-control-btn refresh-btn" title="Refresh" onclick="location.reload()">
                                 <i class="ti ti-refresh"></i>
                             </button>
-                            <a href="{{ route('seller.orders.download-template') }}"
-                                class="btn btn-sm align-items-center px-3 py-2 fs-6"
-                                data-bs-toggle="tooltip"
-                                title="Download CSV">
-                                <i class="fas fa-download fs-5"></i>
-                            </a>
+                            <button class="btn btn-primary btn-sm px-3 py-2" data-bs-toggle="modal" data-bs-target="#rechargeModal">
+                                <i class="ti ti-plus"></i> Recharge wallet
+                            </button>
                         </div>
                     </div>
-
                     <div style="overflow-x: auto;">
-                        <style>
-                            /* Enhanced Table Header Styling */
-                            .modern-table thead tr {
-                                background: linear-gradient(90deg, #3576e3 0, #306cc9 100%) !important;
-                            }
-                            .modern-table thead th {
-                                color: #fff !important;
-                                font-weight: 700;
-                                border: none;
-                                padding: 1rem 0.8rem;
-                                font-size: 0.83rem !important;
-                                letter-spacing: 0.02em;
-                                transition: background 0.3s;
-                                background: transparent;
-                                box-shadow: none !important;
-                                vertical-align: middle;
-                            }
-                            .modern-table thead th i {
-                                color: #e0e7ef;
-                                transition: color 0.3s;
-                                font-size: 1.01rem;
-                                vertical-align: middle;
-                            }
-                            /* Table row and hover effects for better UI/UX */
-                            .modern-table tbody tr {
-                                transition: background 0.23s cubic-bezier(.4,0,.2,1);
-                            }
-                            .modern-table tbody tr:hover {
-                                background: #e1eaff;
-                            }
-                        </style>
                         <table class="modern-table">
                             <thead>
                                 <tr>
-                                    <th><i class="ti ti-hash" style="margin-right: 0.5rem;"></i>Order ID</th>
-                                    <th><i class="ti ti-truck" style="margin-right: 0.5rem;"></i>Status</th>
-                                    <th><i class="ti ti-currency-rupee" style="margin-right: 0.5rem;"></i>Amount</th>
-                                    <th><i class="ti ti-package" style="margin-right: 0.5rem;"></i>Courier</th>
-                                    <th><i class="ti ti-barcode" style="margin-right: 0.5rem;"></i>AWB Number</th>
-                                    <th><i class="ti ti-credit-card" style="margin-right: 0.5rem;"></i>Payment Status</th>
-                                    <th><i class="ti ti-calendar" style="margin-right: 0.5rem;"></i>Created Date</th>
-                                    <th><i class="ti ti-calendar-event" style="margin-right: 0.5rem;"></i>Remittance Date</th>
+                                    <th>#</th>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Transaction / Ref</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($codOrders as $order)
+                                @forelse($recharges as $r)
                                     <tr>
+                                        <td>{{ $recharges->firstItem() + $loop->index }}</td>
+                                        <td>{{ $r->created_at ? $r->created_at->format('M d, Y h:i A') : 'N/A' }}</td>
+                                        <td><span class="amount-value">₹{{ number_format($r->amount, 2) }}</span></td>
+                                        <td><span class="awb-code">{{ $r->code ?: '—' }}</span></td>
+                                        <td>{{ $r->description ?: 'Wallet recharge' }}</td>
                                         <td>
-                                            <span class="order-number">#{{ $order->order_number }}</span>
-                                        </td>
-                                        <td>
-                                            @php
-                                                $statusClass = 'status-pending';
-                                                switch(strtolower($order->shipping_status)) {
-                                                    case 'delivered':
-                                                        $statusClass = 'status-delivered';
-                                                        break;
-                                                    case 'shipped':
-                                                        $statusClass = 'status-shipped';
-                                                        break;
-                                                }
-                                            @endphp
-                                            <span class="status-badge {{ $statusClass }}">
-                                                {{ ucfirst($order->shipping_status) }}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="amount-value">₹{{ number_format($order->collectable_amount, 2) }}</span>
-                                        </td>
-                                        <td>
-                                            <div class="courier-badge">
-                                                <i class="ti ti-truck-delivery"></i>
-                                                <span>{{ $order->all_courier_name }}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span class="awb-code">{{ $order->awb_number }}</span>
-                                        </td>
-                                        <td>
-                                            @if($order->payment_status)
-                                                <span class="status-badge status-delivered">{{ $order->payment_status }}</span>
+                                            @if((string) $r->status === '1')
+                                                <span class="status-badge status-delivered">Success</span>
                                             @else
                                                 <span class="status-badge status-pending">Pending</span>
                                             @endif
                                         </td>
-                                        <td>
-                                            <div class="date-display">
-                                                <i class="ti ti-clock"></i>
-                                                <span>{{ $order->created_at ? $order->created_at->format('M d, Y') : 'N/A' }}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div class="date-display">
-                                                <i class="ti ti-calendar-plus"></i>
-                                                <span>
-                                                    @if($order->delivered_date)
-                                                        {{ \Carbon\Carbon::parse($order->delivered_date)->addDays(7)->format('M d, Y') }}
-                                                    @else
-                                                        N/A
-                                                    @endif
-                                                </span>
-                                            </div>
-                                        </td>
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="8" class="empty-state">
-                                            <i class="ti ti-shopping-cart-off"></i>
-                                            <h4>No COD Orders Found</h4>
-                                            <p>There are no cash on delivery orders to display at the moment.</p>
+                                        <td colspan="6" class="empty-state">
+                                            <i class="ti ti-wallet-off"></i>
+                                            <h4>No recharges yet</h4>
+                                            <p>Your wallet top-ups will appear here.</p>
                                         </td>
                                     </tr>
                                 @endforelse
                             </tbody>
                         </table>
                     </div>
-                    
-                    @if(isset($codOrders) && $codOrders->hasPages())
+
+                    @if(isset($recharges) && $recharges->hasPages())
                         <div class="pagination-wrapper">
-                            {{ $codOrders->links() }}
+                            {{ $recharges->links() }}
                         </div>
                     @endif
                 </div>
