@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Recharge;
 use App\Models\Order;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Carbon\Carbon;
 
 class ResourceController extends Controller
 {
@@ -95,58 +98,110 @@ class ResourceController extends Controller
 //     ]);
 // }
 
+/**
+ * Wallet balance (credits - debits) for the logged-in seller.
+ */
+private function walletBalance($seller)
+{
+    if (!$seller) {
+        return 0;
+    }
+    $credit = Recharge::where('seller_id', $seller->id)
+        ->where('status', 1)
+        ->where('type', 'Credit')
+        ->sum('amount');
+    $debit = Recharge::where('seller_id', $seller->id)
+        ->where('type', 'Debit')
+        ->sum('amount');
+    return $credit - $debit;
+}
+
+/**
+ * Cache of which optional columns exist on the orders table. Older databases
+ * imported for this panel do not always have payment_status / delivered_date /
+ * all_courier_name, and querying a missing column throws a 500.
+ */
+private function orderColumns()
+{
+    static $cols = null;
+    if ($cols === null) {
+        $cols = [];
+        foreach (['payment_status', 'delivered_date', 'all_courier_name', 'shipping_status', 'courier_id'] as $c) {
+            $cols[$c] = Schema::hasColumn('orders', $c);
+        }
+    }
+    return $cols;
+}
+
+/**
+ * Base query: delivered COD orders for a seller.
+ */
+private function deliveredCodQuery($sellerId)
+{
+    $q = Order::where('seller_id', $sellerId)->where('payment_type', 'cod');
+    if ($this->orderColumns()['shipping_status']) {
+        $q->whereRaw('LOWER(shipping_status) = ?', ['delivered']);
+    }
+    return $q;
+}
+
 public function cod()
 {
     $seller = Auth::guard('seller')->user();
 
-    // Initialize with empty paginated collection
-    $codOrders = Order::where('id', '<', 0)->paginate(10);
+    $codOrders = new LengthAwarePaginator([], 0, 10);
     $totalAmount = 0;
     $totalPay = 0;
     $totalCodRemittance = 0;
     $remittanceDate = 'N/A';
 
-    if ($seller && $seller->status == 1) {
-        $sellerRechargeAmount = Recharge::where('seller_id', $seller->id)
-            ->where('status', 1)
-            ->where('type', 'Credit')
-            ->sum('amount');
+    try {
+        $totalAmount = $this->walletBalance($seller);
 
-        $sellerUsedAmount = Recharge::where('seller_id', $seller->id)
-            ->where('type', 'Debit')
-            ->sum('amount');
+        if ($seller && $seller->status == 1) {
+            $cols = $this->orderColumns();
 
-        $totalAmount = $sellerRechargeAmount - $sellerUsedAmount;
+            $unpaid = function ($q) use ($cols) {
+                if ($cols['payment_status']) {
+                    $q->where(function ($w) {
+                        $w->whereNull('payment_status')->orWhere('payment_status', '!=', 'Paid');
+                    });
+                }
+                return $q;
+            };
 
-        $codOrders = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('payment_status', '!=', 'Paid')
-            ->where('shipping_status', 'delivered')
-            ->select('order_number', 'shipping_status', 'collectable_amount', 'courier_id', 'awb_number', 'created_at', 'payment_status')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
+            $select = ['id', 'order_number', 'collectable_amount', 'awb_number', 'created_at'];
+            foreach (['shipping_status', 'courier_id', 'payment_status', 'delivered_date', 'all_courier_name'] as $c) {
+                if ($cols[$c]) {
+                    $select[] = $c;
+                }
+            }
 
-        $totalPay = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', '!=', 'Paid')
-            ->sum('collectable_amount');
+            $codOrders = $unpaid($this->deliveredCodQuery($seller->id))
+                ->select($select)
+                ->orderBy('created_at', 'desc')
+                ->paginate(10);
 
-        $totalCodRemittance = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', 'Paid')
-            ->sum('collectable_amount');
+            $totalPay = $unpaid($this->deliveredCodQuery($seller->id))->sum('collectable_amount');
 
-        $latestDeliveredDate = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->whereNotNull('delivered_date')
-            ->orderBy('delivered_date', 'desc')
-            ->value('delivered_date');
+            if ($cols['payment_status']) {
+                $totalCodRemittance = $this->deliveredCodQuery($seller->id)
+                    ->where('payment_status', 'Paid')
+                    ->sum('collectable_amount');
+            }
 
-        $remittanceDate = $latestDeliveredDate
-            ? \Carbon\Carbon::parse($latestDeliveredDate)->addDays(7)->format('d/m/y')
-            : 'N/A';
+            if ($cols['delivered_date']) {
+                $latest = Order::where('seller_id', $seller->id)
+                    ->where('payment_type', 'cod')
+                    ->whereNotNull('delivered_date')
+                    ->max('delivered_date');
+                if ($latest) {
+                    $remittanceDate = Carbon::parse($latest)->addDays(7)->format('d/m/y');
+                }
+            }
+        }
+    } catch (\Throwable $e) {
+        report($e);
     }
 
     return view('sellerdashboard.passbook.cod', [
@@ -155,198 +210,78 @@ public function cod()
         'codOrders' => $codOrders,
         'totalPay' => $totalPay,
         'totalCodRemittance' => $totalCodRemittance,
-        'remittanceDate' => $remittanceDate
+        'remittanceDate' => $remittanceDate,
     ]);
 }
+
+/**
+ * Wallet recharge history (credits added to the wallet).
+ */
 public function recharge()
 {
     $seller = Auth::guard('seller')->user();
 
-    // Initialize with empty paginated collection
-    $codOrders = Order::where('id', '<', 0)->paginate(10);
+    $recharges = new LengthAwarePaginator([], 0, 10);
     $totalAmount = 0;
-    $totalPay = 0;
-    $totalCodRemittance = 0;
-    $remittanceDate = 'N/A';
+    $totalRecharged = 0;
+    $pendingAmount = 0;
+    $lastRecharge = null;
 
-    if ($seller && $seller->status == 1) {
-        $sellerRechargeAmount = Recharge::where('seller_id', $seller->id)
-            ->where('status', 1)
-            ->where('type', 'Credit')
-            ->sum('amount');
+    try {
+        $totalAmount = $this->walletBalance($seller);
 
-        $sellerUsedAmount = Recharge::where('seller_id', $seller->id)
-            ->where('type', 'Debit')
-            ->sum('amount');
+        if ($seller) {
+            $base = fn () => Recharge::where('seller_id', $seller->id)->where('type', 'Credit');
 
-        $totalAmount = $sellerRechargeAmount - $sellerUsedAmount;
-
-        $codOrders = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('payment_status', '!=', 'Paid')
-            ->where('shipping_status', 'delivered')
-            ->select('order_number', 'shipping_status', 'collectable_amount', 'courier_id', 'awb_number', 'created_at', 'payment_status')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        $totalPay = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', '!=', 'Paid')
-            ->sum('collectable_amount');
-
-        $totalCodRemittance = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', 'Paid')
-            ->sum('collectable_amount');
-
-        $latestDeliveredDate = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->whereNotNull('delivered_date')
-            ->orderBy('delivered_date', 'desc')
-            ->value('delivered_date');
-
-        $remittanceDate = $latestDeliveredDate
-            ? \Carbon\Carbon::parse($latestDeliveredDate)->addDays(7)->format('d/m/y')
-            : 'N/A';
+            $recharges = $base()->orderBy('created_at', 'desc')->paginate(10);
+            $totalRecharged = $base()->where('status', 1)->sum('amount');
+            $pendingAmount = $base()->where('status', '!=', 1)->sum('amount');
+            $lastRecharge = $base()->where('status', 1)->latest('created_at')->first();
+        }
+    } catch (\Throwable $e) {
+        report($e);
     }
 
     return view('sellerdashboard.passbook.recharge', [
         'seller' => $seller,
         'totalAmount' => $totalAmount,
-        'codOrders' => $codOrders,
-        'totalPay' => $totalPay,
-        'totalCodRemittance' => $totalCodRemittance,
-        'remittanceDate' => $remittanceDate
+        'recharges' => $recharges,
+        'totalRecharged' => $totalRecharged,
+        'pendingAmount' => $pendingAmount,
+        'lastRecharge' => $lastRecharge,
     ]);
 }
+
+/**
+ * Static help / support page - no order data needed.
+ */
 public function help()
 {
     $seller = Auth::guard('seller')->user();
-
-    // Initialize with empty paginated collection
-    $codOrders = Order::where('id', '<', 0)->paginate(10);
     $totalAmount = 0;
-    $totalPay = 0;
-    $totalCodRemittance = 0;
-    $remittanceDate = 'N/A';
-
-    if ($seller && $seller->status == 1) {
-        $sellerRechargeAmount = Recharge::where('seller_id', $seller->id)
-            ->where('status', 1)
-            ->where('type', 'Credit')
-            ->sum('amount');
-
-        $sellerUsedAmount = Recharge::where('seller_id', $seller->id)
-            ->where('type', 'Debit')
-            ->sum('amount');
-
-        $totalAmount = $sellerRechargeAmount - $sellerUsedAmount;
-
-        $codOrders = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('payment_status', '!=', 'Paid')
-            ->where('shipping_status', 'delivered')
-            ->select('order_number', 'shipping_status', 'collectable_amount', 'courier_id', 'awb_number', 'created_at', 'payment_status')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        $totalPay = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', '!=', 'Paid')
-            ->sum('collectable_amount');
-
-        $totalCodRemittance = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', 'Paid')
-            ->sum('collectable_amount');
-
-        $latestDeliveredDate = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->whereNotNull('delivered_date')
-            ->orderBy('delivered_date', 'desc')
-            ->value('delivered_date');
-
-        $remittanceDate = $latestDeliveredDate
-            ? \Carbon\Carbon::parse($latestDeliveredDate)->addDays(7)->format('d/m/y')
-            : 'N/A';
+    try {
+        $totalAmount = $this->walletBalance($seller);
+    } catch (\Throwable $e) {
+        report($e);
     }
 
-    return view('sellerdashboard.help', [
-        'seller' => $seller,
-        'totalAmount' => $totalAmount,
-        'codOrders' => $codOrders,
-        'totalPay' => $totalPay,
-        'totalCodRemittance' => $totalCodRemittance,
-        'remittanceDate' => $remittanceDate
-    ]);
+    return view('sellerdashboard.help', compact('seller', 'totalAmount'));
 }
 
+/**
+ * Static API documentation page - no order data needed.
+ */
 public function api()
 {
     $seller = Auth::guard('seller')->user();
-
-    // Initialize with empty paginated collection
-    $codOrders = Order::where('id', '<', 0)->paginate(10);
     $totalAmount = 0;
-    $totalPay = 0;
-    $totalCodRemittance = 0;
-    $remittanceDate = 'N/A';
-
-    if ($seller && $seller->status == 1) {
-        $sellerRechargeAmount = Recharge::where('seller_id', $seller->id)
-            ->where('status', 1)
-            ->where('type', 'Credit')
-            ->sum('amount');
-
-        $sellerUsedAmount = Recharge::where('seller_id', $seller->id)
-            ->where('type', 'Debit')
-            ->sum('amount');
-
-        $totalAmount = $sellerRechargeAmount - $sellerUsedAmount;
-
-        $codOrders = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('payment_status', '!=', 'Paid')
-            ->where('shipping_status', 'delivered')
-            ->select('order_number', 'shipping_status', 'collectable_amount', 'courier_id', 'awb_number', 'created_at', 'payment_status')
-            ->orderBy('created_at', 'desc')
-            ->paginate(10);
-
-        $totalPay = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', '!=', 'Paid')
-            ->sum('collectable_amount');
-
-        $totalCodRemittance = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->where('shipping_status', 'delivered')
-            ->where('payment_status', 'Paid')
-            ->sum('collectable_amount');
-
-        $latestDeliveredDate = Order::where('seller_id', $seller->id)
-            ->where('payment_type', 'cod')
-            ->whereNotNull('delivered_date')
-            ->orderBy('delivered_date', 'desc')
-            ->value('delivered_date');
-
-        $remittanceDate = $latestDeliveredDate
-            ? \Carbon\Carbon::parse($latestDeliveredDate)->addDays(7)->format('d/m/y')
-            : 'N/A';
+    try {
+        $totalAmount = $this->walletBalance($seller);
+    } catch (\Throwable $e) {
+        report($e);
     }
 
-    return view('sellerdashboard.api', [
-        'seller' => $seller,
-        'totalAmount' => $totalAmount,
-        'codOrders' => $codOrders,
-        'totalPay' => $totalPay,
-        'totalCodRemittance' => $totalCodRemittance,
-        'remittanceDate' => $remittanceDate
-    ]);
+    return view('sellerdashboard.api', compact('seller', 'totalAmount'));
 }
 //     public function cod()
 // {
