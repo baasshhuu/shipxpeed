@@ -303,7 +303,7 @@
                             </span>
                             Add Order
                         </a>
-                        <a href="{{ route('track-order') }}"
+                        <a href="{{ route('seller.trackorder.in') }}"
                             class="btn btn-light text-start py-2 px-3 shadow-none d-flex align-items-center quick-action-btn"
                             style="font-size:1.01rem; border:1px solid #e5e7eb; border-radius:8px; transition: all .13s; color:#1d3f53; font-weight: 500;">
                             <span style="background:#e7f7fa; color:#4EA7C8; border-radius:6px; min-width:34px; height:34px; display:flex; align-items:center; justify-content:center; margin-right:12px;">
@@ -415,7 +415,7 @@
                         const dropdownItems = [
                             { href: "{{ route('ratecards') }}", text: "Rate Calculator" },
                             { href: "{{ route('seller.orderadd') }}", text: "Add Order" },
-                            { href: "{{ route('track-order') }}", text: "Track Order" }
+                            { href: "{{ route('seller.trackorder.in') }}", text: "Track Order" }
                         ];
 
                         function createDropdownMenu() {
