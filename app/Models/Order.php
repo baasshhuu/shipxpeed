@@ -45,6 +45,7 @@ class Order extends Model
         'shipper_hub_id',
         'smartship_tracking_url',
         'payment_status',
+        'delivered_date',
         'rto_amount',
         'smarship_courier_id',
         'shipping_date',
